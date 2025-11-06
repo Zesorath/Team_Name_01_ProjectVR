@@ -52,7 +52,7 @@ public class Spicerunner : MonoBehaviour
         Debug.Log("[Spice] Disconnected.");
     }
 
-    private void RunSpiceOp(float vdc, float r)
+    public void RunSpiceOp(float vdc, float r)
     {
         try
         {
