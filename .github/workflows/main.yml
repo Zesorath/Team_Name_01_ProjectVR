@@ -3,8 +3,9 @@ name: circuit_vr_CI
 on:
   push:
     branches:
-      - tests
-#  pull_request:
+      - staging
+      - main
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
