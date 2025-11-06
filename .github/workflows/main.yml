@@ -13,17 +13,34 @@ concurrency:
 jobs:
   editmode-tests:
     runs-on: ubuntu-latest
+    permissions: 
+      contents: read
+      checks: write
+      pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
         with: 
           lfs: true
-      - run: echo "Running tests (none yet)"
+      - run: echo "Running tests"
 
-      - uses: game-ci/unity-test-runner@v4
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./Library
+          key: Library-${{ runner.os }}-${{ hashFiles('**/Packages/manifest.json') }}
+          restore-keys: |
+            Library-${{ runner.os }}-
+
+      - name: Run Unity tests
+        uses: game-ci/unity-test-runner@v4
         env:
             UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
             UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
             UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: .
+          unityVersion: 6000.2.7f2
+          testMode: editmode
           githubToken: ${{ secrets.GITHUB_TOKEN }}
