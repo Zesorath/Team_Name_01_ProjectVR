@@ -571,8 +571,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c252f26ee4f3d084e8735b24a2d9a1d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PortSocketBinder
-  side: 0
-  circuit: {fileID: 2120564933}
+  socketPort: {fileID: 115057037}
 --- !u!114 &115057037
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1124,8 +1123,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c252f26ee4f3d084e8735b24a2d9a1d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PortSocketBinder
-  side: 0
-  circuit: {fileID: 0}
+  socketPort: {fileID: 0}
 --- !u!4 &413787140 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 4803614339566677342, guid: 72138a47ec7b8714c91aa39dcdf3b714, type: 3}
@@ -1240,8 +1238,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c252f26ee4f3d084e8735b24a2d9a1d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PortSocketBinder
-  side: 1
-  circuit: {fileID: 2120564933}
+  socketPort: {fileID: 620948744}
 --- !u!114 &620948744
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1683,33 +1680,6 @@ MonoBehaviour:
   colorWhenConnected: {r: 1, g: 0.65, b: 0, a: 1}
   colorWhenOpen: {r: 1, g: 0, b: 0, a: 1}
   sphereSize: 0.01
---- !u!54 &919048912
-Rigidbody:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 245149517}
-  serializedVersion: 5
-  m_Mass: 1
-  m_LinearDamping: 0
-  m_AngularDamping: 0.05
-  m_CenterOfMass: {x: 0, y: 0, z: 0}
-  m_InertiaTensor: {x: 1, y: 1, z: 1}
-  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_IncludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ExcludeLayers:
-    serializedVersion: 2
-    m_Bits: 0
-  m_ImplicitCom: 1
-  m_ImplicitTensor: 1
-  m_UseGravity: 1
-  m_IsKinematic: 1
-  m_Interpolate: 1
-  m_Constraints: 0
-  m_CollisionDetection: 0
 --- !u!1 &969543810
 GameObject:
   m_ObjectHideFlags: 0
@@ -2686,8 +2656,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c252f26ee4f3d084e8735b24a2d9a1d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PortSocketBinder
-  side: 0
-  circuit: {fileID: 2120564933}
+  socketPort: {fileID: 1686395441}
 --- !u!114 &1686395441
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3184,15 +3153,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: 2390707815838080008, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0
+      value: 0.02810955
       objectReference: {fileID: 0}
     - target: {fileID: 2390707815838080008, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 4.357
+      value: 0.050000012
       objectReference: {fileID: 0}
     - target: {fileID: 2390707815838080008, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0
+      value: 0.21037975
       objectReference: {fileID: 0}
     - target: {fileID: 2390707815838080008, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
       propertyPath: m_LocalRotation.w
@@ -3225,26 +3194,6 @@ PrefabInstance:
     - target: {fileID: 2934986369268894323, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
       propertyPath: m_Name
       value: endpoint
-      objectReference: {fileID: 0}
-    - target: {fileID: 6529785201875073593, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
-      propertyPath: m_IsTrigger
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 6802154570617662290, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
-      propertyPath: m_Enabled
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8633702697172300347, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8633702697172300347, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8633702697172300347, guid: 8cd2519a76bf4ce45a43b0a79b245c5f, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3566,8 +3515,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c252f26ee4f3d084e8735b24a2d9a1d6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PortSocketBinder
-  side: 1
-  circuit: {fileID: 2120564933}
+  socketPort: {fileID: 0}
 --- !u!114 &2020219180
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3881,25 +3829,17 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 919048908}
     m_Modifications:
-    - target: {fileID: 2949209615656484180, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 4372995456839252154, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
-      propertyPath: m_IsTrigger
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 7575017595857867380, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.121
+      value: 0.008264065
       objectReference: {fileID: 0}
     - target: {fileID: 7575017595857867380, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 4.454
+      value: 0.050000012
       objectReference: {fileID: 0}
     - target: {fileID: 7575017595857867380, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
       propertyPath: m_LocalPosition.z
-      value: -0.42
+      value: -0.6648419
       objectReference: {fileID: 0}
     - target: {fileID: 7575017595857867380, guid: 388daaff09cb9944b853ac3651e48a73, type: 3}
       propertyPath: m_LocalRotation.w
@@ -4054,10 +3994,6 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
-    - target: {fileID: 2934954700616550442, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
-      propertyPath: m_Mesh
-      value: 
-      objectReference: {fileID: 0}
     - target: {fileID: 6162781025177126486, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       propertyPath: spiceRunner
       value: 
@@ -4068,11 +4004,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6318135422657084345, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       propertyPath: m_LocalPosition.y
-      value: -3.415
+      value: 0.75
       objectReference: {fileID: 0}
     - target: {fileID: 6318135422657084345, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       propertyPath: m_LocalPosition.z
-      value: 0.313
+      value: 0.30761
       objectReference: {fileID: 0}
     - target: {fileID: 6318135422657084345, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       propertyPath: m_LocalRotation.w
@@ -4102,10 +4038,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 6318135422657084345, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
-      propertyPath: m_ConstrainProportionsScale
-      value: 1
-      objectReference: {fileID: 0}
     - target: {fileID: 8615173326403048744, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       propertyPath: m_Name
       value: Wire
@@ -4120,9 +4052,6 @@ PrefabInstance:
       insertIndex: -1
       addedObject: {fileID: 1642051001}
     m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 8615173326403048744, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
-      insertIndex: 3
-      addedObject: {fileID: 919048912}
     - targetCorrespondingSourceObject: {fileID: 8615173326403048744, guid: 077cb734b9010ca468e72dc19ab0596d, type: 3}
       insertIndex: -1
       addedObject: {fileID: 919048910}
@@ -4201,7 +4130,7 @@ PrefabInstance:
     - target: {fileID: 5899260805969876588, guid: 750ee792f5208c54591022173fd43fd7, type: 3}
       propertyPath: b
       value: 
-      objectReference: {fileID: 2020219174}
+      objectReference: {fileID: 180501227}
     - target: {fileID: 6209794749023581474, guid: 750ee792f5208c54591022173fd43fd7, type: 3}
       propertyPath: cable
       value: 
