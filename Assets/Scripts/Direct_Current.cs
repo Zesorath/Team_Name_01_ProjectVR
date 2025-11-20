@@ -1,7 +1,16 @@
 using UnityEngine;
 
-public class DC : MonoBehaviour
+public class Dummyscript : MonoBehaviour
 {
-    [Tooltip("DC voltage in volts")]
-    public float voltage = 5.0f;  // change at runtime if you like
+    // Start is called once before the first execution of Update after the MonoBehaviour is created
+    void Start()
+    {
+        
+    }
+
+    // Update is called once per frame
+    void Update()
+    {
+        
+    }
 }
