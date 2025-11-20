@@ -7,7 +7,7 @@ using SpiceSharp.Simulations;
 using SpiceSharp.Simulations.Base;
 using SpiceSharp.Components;
 
-public class CircuitManager : MonoBehaviour
+public partial class CircuitManager : MonoBehaviour
 {
     public static CircuitManager Instance { get; private set; }
 
@@ -224,6 +224,7 @@ public class CircuitManager : MonoBehaviour
         {
             Debug.LogWarning("[CircuitManager] No circuit built, skipping DC OP.");
             overallVoltage = 0f;
+            OnVoltageUpdated?.Invoke(overallVoltage);
             return;
         }
 
@@ -231,65 +232,105 @@ public class CircuitManager : MonoBehaviour
         {
             Debug.Log("[CircuitManager] OP run, but no nodes to measure.");
             overallVoltage = 0f;
+            OnVoltageUpdated?.Invoke(overallVoltage);
             return;
         }
 
+        // Clean up the node list
+        var distinctNodes = measurementNodes
+            .Where(n => !string.IsNullOrWhiteSpace(n))
+            .Distinct()
+            .ToList();
+
+        if (distinctNodes.Count == 0)
+        {
+            Debug.Log("[CircuitManager] OP run, but all measurement nodes were null/empty.");
+            overallVoltage = 0f;
+            OnVoltageUpdated?.Invoke(overallVoltage);
+            return;
+        }
+
+        Debug.Log($"[CircuitManager] OP starting. Raw measurementNodes count = {measurementNodes.Count}, distinct = {distinctNodes.Count}, nodes = [{string.Join(", ", distinctNodes)}]");
+
+        // "Furthest" node = last in the list (for your series chain mental model)
+        string furthestNode = distinctNodes[distinctNodes.Count - 1];
+        Debug.Log($"[CircuitManager] OP: using '{furthestNode}' as furthest node for overall voltage.");
+
         var op = new OP("dc-op");
 
+        // Create exports for all measurement nodes (vs ground "0")
         var exports = new Dictionary<string, RealVoltageExport>();
-        foreach (var node in measurementNodes.Distinct())
+        foreach (var node in distinctNodes)
         {
             try
             {
-                // Explicitly measure node vs. ground "0"
-                exports[node] = new RealVoltageExport(op, node, "0");
+                var export = new RealVoltageExport(op, node, "0");
+                exports[node] = export;
+                Debug.Log($"[CircuitManager] OP: created voltage export for node '{node}' vs ground.");
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[CircuitManager] Failed to create export for node '{node}': {e.Message}");
+                Debug.LogWarning($"[CircuitManager] OP: failed to create export for node '{node}': {e.Message}");
             }
         }
 
         if (exports.Count == 0)
         {
-            Debug.LogWarning("[CircuitManager] OP run, but no valid node exports were created.");
+            Debug.LogWarning("[CircuitManager] OP run, but no valid RealVoltageExport objects were created.");
             overallVoltage = 0f;
+            OnVoltageUpdated?.Invoke(overallVoltage);
             return;
         }
 
         try
         {
+            Debug.Log("[CircuitManager] OP: running SpiceSharp operating point analysis...");
             op.Run(circuit);
+            Debug.Log("[CircuitManager] OP: SpiceSharp run complete, reading node voltages...");
 
+            double furthestVoltage = 0.0;
             double maxAbs = 0.0;
-            double best = 0.0;
 
-            foreach (var kvp in exports)
+            for (int i = 0; i < distinctNodes.Count; i++)
             {
-                string nodeName = kvp.Key;
-                double v = kvp.Value.Value;
+                string name = distinctNodes[i];
 
-                Debug.Log($"[CircuitManager] Node {nodeName} = {v:F4} V");
+                if (!exports.TryGetValue(name, out var export))
+                {
+                    Debug.LogWarning($"[CircuitManager] OP: node '{name}' has no associated export.");
+                    continue;
+                }
 
+                double v = export.Value;  // This is V(node) - V(0)
+                Debug.Log($"[CircuitManager] OP: Node[{i}] '{name}' = {v:F4} V");
+
+                // Track "furthest" node by position
+                if (name == furthestNode)
+                {
+                    furthestVoltage = v;
+                }
+
+                // Also track the largest |V| just for sanity / potential future use
                 double abs = Math.Abs(v);
                 if (abs > maxAbs)
-                {
                     maxAbs = abs;
-                    best = v;
-                }
             }
 
-            overallVoltage = (float)best;
-            Debug.Log($"[CircuitManager] OP done. overallVoltage = {overallVoltage:F4} V");
+            Debug.Log($"[CircuitManager] OP: -> Furthest node '{furthestNode}' current voltage = {furthestVoltage:F4} V");
+
+            overallVoltage = (float)furthestVoltage;
+            OnVoltageUpdated?.Invoke(overallVoltage);
+
+            Debug.Log($"[CircuitManager] OP done. Furthest node '{furthestNode}' = {overallVoltage:F4} V, overallVoltage set.");
         }
         catch (Exception ex)
         {
             Debug.LogError($"[CircuitManager] DC OP failed: {ex}");
             overallVoltage = 0f;
+            OnVoltageUpdated?.Invoke(overallVoltage);
         }
     }
 }
-
 /// <summary>
 /// Get the DC voltage at a specific port (socket), if it belongs to a wired node.
 /// </summary>
