@@ -1,7 +1,14 @@
 using UnityEngine;
+using SpiceSharp;
+using SpiceSharp.Components;
 
-public class Direct_Current : MonoBehaviour
+public class DCSource : CircuitComponentBase
 {
-    [Tooltip("DC voltage in volts")]
-    public float voltage = 5.0f;  // change at runtime if you like
+    public float voltage = 5f;
+
+    public override void AddToSpice(Circuit ckt, string posNode, string negNode)
+    {
+        Debug.Log($"[DCSource] Adding Vsource: {componentId} => {posNode} to {negNode}, {voltage}V");
+        ckt.Add(new VoltageSource(componentId, posNode, negNode, voltage));
+    }
 }
