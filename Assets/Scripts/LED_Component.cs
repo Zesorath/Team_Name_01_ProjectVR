@@ -4,53 +4,59 @@ using SpiceSharp.Components;
 
 public class LED_Component : CircuitComponentBase
 {
-    [Header("Unity LED Visuals")]
-    public Renderer glowRenderer;
+    [Header("LED Visual Settings")]
+    public Renderer ledRenderer;
     public Color offColor = Color.black;
-    public Color onColor = Color.red;
-    public float forwardVoltage = 2.0f; // cutoff for lighting in Unity
+    public Color dimColor = new Color(1f, 0.2f, 0.2f);
+    public Color brightColor = Color.white;
 
-    private string modelName;
+    [Header("Electrical Characteristics")]
+    public float forwardVoltage = 1.6f; // Threshold where LED begins lighting
+    public float maxVoltage = 2.5f;     // Max brightness voltage
+
+    private float currentVoltage = 0f;
 
     protected override void Awake()
     {
         base.Awake();
+        if (!ledRenderer)
+            ledRenderer = GetComponentInChildren<Renderer>();
+    }
 
-        modelName = componentId + "_model";
+    public override void AddToSpice(SpiceSharp.Circuit ckt, string pos, string neg)
+    {
+        // Temporary gameplay model: treat LED as resistor until diode model is added
+        float fakeResistance = 1000f;
 
-        if (glowRenderer == null)
-            glowRenderer = GetComponentInChildren<Renderer>();
+        Debug.Log($"[LED] Adding TEST resistor for LED between {pos} and {neg}");
+        ckt.Add(new SpiceSharp.Components.Resistor(componentId + "_R", pos, neg, fakeResistance));
+    }
 
-        if (glowRenderer != null)
+    public void UpdateLEDState(float voltageDrop)
+    {
+        currentVoltage = voltageDrop;
+
+        if (!ledRenderer)
+            return;
+
+        Material mat = ledRenderer.material;
+
+        // OFF behavior
+        if (voltageDrop < forwardVoltage)
         {
-            var mat = glowRenderer.material;
-            mat.EnableKeyword("_EMISSION");
             mat.SetColor("_EmissionColor", offColor);
-        }
-    }
-
-    public override void AddToSpice(Circuit ckt, string nodePos, string nodeNeg)
-    {
-        Debug.Log($"[LED] Adding diode {componentId} between {nodePos} and {nodeNeg}");
-
-        // ⚠ IMPORTANT: Must define a model BEFORE creating diode entity
-        var model = new DiodeModel(modelName);
-        ckt.Add(model);
-
-        var diode = new Diode(componentId, nodePos, nodeNeg, modelName);
-        ckt.Add(diode);
-    }
-
-    public void UpdateLEDState(float voltageAcross)
-    {
-        bool isOn = voltageAcross >= forwardVoltage;
-
-        if (glowRenderer != null)
-        {
-            var mat = glowRenderer.material;
-            mat.SetColor("_EmissionColor", isOn ? onColor : offColor);
+            ledRenderer.material.color = offColor;
+            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → OFF");
+            return;
         }
 
-        Debug.Log($"[LED] {componentId}: {voltageAcross:F3} V → {(isOn ? "ON" : "OFF")}");
+        // ON behavior — scale brightness
+        float t = Mathf.InverseLerp(forwardVoltage, maxVoltage, voltageDrop);
+        Color finalColor = Color.Lerp(dimColor, brightColor, t);
+
+        ledRenderer.material.color = finalColor;
+        mat.SetColor("_EmissionColor", finalColor * 2f); // glow
+
+        Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON ({t:P0})");
     }
 }

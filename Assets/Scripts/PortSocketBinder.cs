@@ -1,50 +1,74 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 
+[RequireComponent(typeof(UnityEngine.XR.Interaction.Toolkit.Interactors.XRSocketInteractor))]
 public class PortSocketBinder : MonoBehaviour
 {
-    public CircuitComponentBase component;
     private UnityEngine.XR.Interaction.Toolkit.Interactors.XRSocketInteractor socket;
+    private CircuitComponentBase owningComponent;
+    private WireEnd connectedEnd;
 
-    void Awake()
+    private void Awake()
     {
         socket = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactors.XRSocketInteractor>();
+        owningComponent = GetComponentInParent<CircuitComponentBase>();
+
+        if (owningComponent == null)
+        {
+            Debug.LogError($"[PortSocketBinder] {name} could not find CircuitComponentBase on parent.");
+        }
+
         socket.selectEntered.AddListener(OnSelectEntered);
         socket.selectExited.AddListener(OnSelectExited);
-        Debug.Log($"[PortSocketBinder] Ready on {component?.componentId}");
+
+        Debug.Log($"[PortSocketBinder] Ready on {owningComponent?.componentId ?? name}");
     }
 
     private void OnDestroy()
     {
-        socket.selectEntered.RemoveListener(OnSelectEntered);
-        socket.selectExited.RemoveListener(OnSelectExited);
+        if (socket != null)
+        {
+            socket.selectEntered.RemoveListener(OnSelectEntered);
+            socket.selectExited.RemoveListener(OnSelectExited);
+        }
     }
 
     private void OnSelectEntered(SelectEnterEventArgs args)
     {
-        var wire = args.interactableObject.transform.GetComponentInParent<Wire>();
-        if (wire == null) return;
+        var t = args.interactableObject.transform;
+        Debug.Log($"[PortSocketBinder] {owningComponent?.componentId} received object: {t.name}");
 
-        if (wire.endA == null)
-            wire.endA = this;
-        else
-            wire.endB = this;
+        // Look for a WireEnd on the grabbed object or its parents
+        var end = t.GetComponentInParent<WireEnd>();
+        if (end == null || end.parentWire == null)
+        {
+            Debug.Log($"[PortSocketBinder] {owningComponent?.componentId} got non-wire interactable {t.name}.");
+            return;
+        }
 
-        Debug.Log($"[PortSocketBinder] {component.componentId} connected");
+        connectedEnd = end;
+        end.parentWire.NotifyEndConnected(end, owningComponent);
 
-        CircuitManager.Instance.NotifyConnectionChanged();
+        if (CircuitManager.Instance != null)
+        {
+            Debug.Log("[PortSocketBinder] Connection changed � notifying CircuitManager.");
+            CircuitManager.Instance.NotifyConnectionChanged();
+        }
     }
 
     private void OnSelectExited(SelectExitEventArgs args)
     {
-        var wire = args.interactableObject.transform.GetComponentInParent<Wire>();
-        if (wire == null) return;
+        if (connectedEnd != null && connectedEnd.parentWire != null && owningComponent != null)
+        {
+            connectedEnd.parentWire.NotifyEndDisconnected(connectedEnd, owningComponent);
+        }
 
-        if (wire.endA == this) wire.endA = null;
-        if (wire.endB == this) wire.endB = null;
+        connectedEnd = null;
 
-        Debug.Log($"[PortSocketBinder] {component.componentId} disconnected");
-
-        CircuitManager.Instance.NotifyConnectionChanged();
+        if (CircuitManager.Instance != null)
+        {
+            Debug.Log("[PortSocketBinder] Disconnection � notifying CircuitManager.");
+            CircuitManager.Instance.NotifyConnectionChanged();
+        }
     }
 }
