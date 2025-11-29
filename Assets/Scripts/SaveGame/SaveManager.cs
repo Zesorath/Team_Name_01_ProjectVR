@@ -3,41 +3,93 @@ using System.Collections.Generic;
 
 public class SaveManager : MonoBehaviour
 {
+    public static SaveManager Instance { get; private set; }
     private SaveData currentSave;
-    Dictionary<string, SaveableObject> saveablesKeyed;
 
-    void Awake()
+    Dictionary<Type, int> typeCounters;
+    public Dictionary<string, SaveableObject> saveablesKeyed;
+
+    public enum Type
+    {
+        WIRE,
+        POWER_SOURCE,
+        RESISTOR,
+        OTHER
+    }
+
+    void InitTypeCounters()
+    {
+        typeCounters = new Dictionary<Type, int>
+        {
+            { Type.WIRE, 0 },
+            { Type.POWER_SOURCE, 0 },
+            { Type.RESISTOR, 0 },
+            { Type.OTHER, 0 }
+        };
+
+    }
+    
+    // Generate a unique identifier for components spawned in at runtime, using 
+    // the individual type counters. Call this in SaveableObject
+    public string GenerateID(Type type)
+    {
+        int index = typeCounters[type];
+        typeCounters[type] += 1;
+
+        return $"{type}_{index}";
+    }
+
+    // Add new SaveableObject to saveablesKeyed
+    public void RegisterSaveable(SaveableObject obj)
+    {
+        // saveablesKeyed not yet initialized
+        if (saveablesKeyed == null)
+        {
+            saveablesKeyed = new Dictionary<string, SaveableObject>();
+        }
+
+        // obj has no ID--don't save
+        if (string.IsNullOrEmpty(obj.id))
+        {
+            Debug.LogWarning(
+                $"SaveableObject {obj.gameObject.name} has empty id--not saved"
+            );
+            return;
+        }
+
+        // obj with the current ID already exists
+        if (saveablesKeyed.ContainsKey(obj.id))
+        {
+            Debug.LogWarning(
+                $"SaveableObject with id {obj.id} already exists--not saved"
+            );
+            return;
+        }
+
+        // Otherwise, go ahead and add the SaveableObject
+        saveablesKeyed.Add(obj.id, obj);
+    }
+
+    void CatalogStartingObjects()
     {
         // Find all the SaveableObjects in the scene
         SaveableObject[] saveablesRaw = FindObjectsByType<SaveableObject>(
             FindObjectsSortMode.None
         );
-
-        saveablesKeyed = new Dictionary<string, SaveableObject>();
         
         foreach (var s in saveablesRaw)
         {
-            // Empty ID field
-            if (string.IsNullOrEmpty(s.id))
-            {
-                Debug.LogWarning(
-                    $"SaveableObject on {s.gameObject.name} has no id"
-                );
-                continue;
-            }
-
-            // Duplicate ID
-            if (saveablesKeyed.ContainsKey(s.id))
-            {
-                Debug.LogWarning(
-                    $"Duplicate SaveableObject id {s.id} on {s.gameObject.name}"
-                );
-                continue;
-            }
-
-            // Otherwise, save the object
-            saveablesKeyed.Add(s.id, s);
+            RegisterSaveable(s);
         }
+    }
+
+
+
+    void Awake()
+    {
+        Instance = this;
+        InitTypeCounters();
+        CatalogStartingObjects();
     }
 
     // Build SaveData
