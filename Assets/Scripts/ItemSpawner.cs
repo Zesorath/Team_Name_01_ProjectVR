@@ -19,6 +19,13 @@ public class ItemSpawner : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        // Load() could cause LastItem to be destroyed. It that case, re-spawn 
+        if (LastItem == null)
+        {
+            Spawn();
+            return;
+        }
+        
         if ( (LastItem.transform.position-this.transform.position).magnitude > Respawn_Radius )
         {
             Spawn();

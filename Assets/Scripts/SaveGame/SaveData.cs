@@ -3,5 +3,5 @@ using UnityEngine;
 
 public class SaveData
 {
-    public List<ObjectState> objects;
+    public List<ObjectState> objStates;
 }

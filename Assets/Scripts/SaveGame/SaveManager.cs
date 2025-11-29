@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System.Linq;
 
+[DefaultExecutionOrder(-100)]
 public class SaveManager : MonoBehaviour
 {
     public static SaveManager Instance { get; private set; }
@@ -69,7 +71,6 @@ public class SaveManager : MonoBehaviour
         // Otherwise, go ahead and add the SaveableObject
         saveablesKeyed.Add(obj.id, obj);
     }
-
     void CatalogStartingObjects()
     {
         // Find all the SaveableObjects in the scene
@@ -83,8 +84,6 @@ public class SaveManager : MonoBehaviour
         }
     }
 
-
-
     void Awake()
     {
         Instance = this;
@@ -96,16 +95,16 @@ public class SaveManager : MonoBehaviour
     public void Save()
     {
         currentSave = new SaveData();
-        currentSave.objects = new List<ObjectState>();
+        currentSave.objStates = new List<ObjectState>();
 
         foreach (var obj in saveablesKeyed)
         {
             SaveableObject saveable = obj.Value;
             ObjectState state = saveable.StoreObjectState();
-            currentSave.objects.Add(state);
+            currentSave.objStates.Add(state);
         }
 
-        Debug.Log("Saved" + currentSave.objects.Count + " objects.");
+        Debug.Log("Saved" + currentSave.objStates.Count + " objects.");
     }
 
     // Apply SaveData
@@ -117,7 +116,30 @@ public class SaveManager : MonoBehaviour
             return;
         }
 
-        foreach (var state in currentSave.objects)
+        // Build the set of saved IDs
+        HashSet<string> savedIds = new HashSet<string>();
+        foreach (var state in currentSave.objStates)
+        {
+            if (!string.IsNullOrEmpty(state.id)) savedIds.Add(state.id);
+        }
+
+        // Iterate over a copy of saveablesKeyed, delete objects that have been 
+        // spawned since last save
+        foreach (var pair in saveablesKeyed.ToList())
+        {
+            string id = pair.Key;
+            SaveableObject obj = pair.Value;
+
+            if (!savedIds.Contains(id))
+            {
+                // Delete the object
+                if (obj != null) Destroy(obj.gameObject);
+                saveablesKeyed.Remove(id);
+            }
+        }
+
+        // Apply SaveData
+        foreach (var state in currentSave.objStates)
         {
             if (saveablesKeyed.TryGetValue(state.id, out SaveableObject saveable))
             {
@@ -129,7 +151,7 @@ public class SaveManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Loaded " + currentSave.objects.Count + " objects.");
+        Debug.Log("Loaded " + currentSave.objStates.Count + " objects.");
     }
 
     void Update()
