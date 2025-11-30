@@ -19,7 +19,7 @@ public class CircuitManager : MonoBehaviour
     // keep graph accessible for Spice building
     private Dictionary<CircuitComponentBase, List<CircuitComponentBase>> _graph =
         new Dictionary<CircuitComponentBase, List<CircuitComponentBase>>();
-
+  
     private void Awake()
     {
         Instance = this;
@@ -52,117 +52,177 @@ public class CircuitManager : MonoBehaviour
 
         return name;
     }
+    private bool _isRebuilding = false;
+
     private void RebuildAndSimulate()
     {
-        var wires = Object.FindObjectsByType<Wire>(FindObjectsSortMode.None);
-        Debug.Log($"[CircuitManager] Rebuild: found {wires.Length} wires.");
-
-        _graph.Clear();
-
-        foreach (var w in wires)
+        if (_isRebuilding) return;
+        _isRebuilding = true;
+        try
         {
-            if (!w || !w.IsComplete)
-                continue;
+            var wires = Object.FindObjectsByType<Wire>(FindObjectsSortMode.None);
+            var allPorts = Object.FindObjectsByType<PortSocketBinder>(FindObjectsSortMode.None);
+            var allComponents = Object.FindObjectsByType<CircuitComponentBase>(FindObjectsSortMode.None);
 
-            var (a, b) = w.GetConnectionPair();
-            if (a == null || b == null)
-                continue;
-
-            if (!_graph.TryGetValue(a, out var listA))
-                _graph[a] = listA = new List<CircuitComponentBase>();
-
-            if (!_graph.TryGetValue(b, out var listB))
-                _graph[b] = listB = new List<CircuitComponentBase>();
-
-            if (!listA.Contains(b)) listA.Add(b);
-            if (!listB.Contains(a)) listB.Add(a);
-
-            Debug.Log($"[CircuitManager] Graph edge: {a.componentId} ↔ {b.componentId}");
-        }
-
-        Debug.Log($"[CircuitManager] Nodes dict contains {_graph.Count} components.");
-
-        if (_graph.Count < 2)
-        {
-            Debug.LogWarning("[CircuitManager] Need at least 2 connected components.");
-            TurnAllLedsOff();
-            lastVoltage = 0;
-            return;
-        }
-
-        var globalVisited = new HashSet<CircuitComponentBase>();
-        TurnAllLedsOff();
-
-        float highestVoltageSeen = 0f;
-
-        foreach (var start in _graph.Keys)
-        {
-            if (globalVisited.Contains(start))
-                continue;
-
-            // BFS to get component group
-            var group = new List<CircuitComponentBase>();
-            var q = new Queue<CircuitComponentBase>();
-            q.Enqueue(start);
-            globalVisited.Add(start);
-
-            while (q.Count > 0)
+            // 1. Build node groups using union-find
+            var nodeGroups = new DisjointSet<PortSocketBinder>();
+            foreach (var wire in wires)
             {
-                var cur = q.Dequeue();
-                group.Add(cur);
+                if (!wire || !wire.IsComplete) continue;
+                var (a, b) = (wire.portA, wire.portB);
+                if (a != null && b != null)
+                    nodeGroups.Union(a, b);
+            }
 
-                if (_graph.TryGetValue(cur, out var neigh))
+            // 2. Assign node names (deep snapshot to avoid modification during enumeration)
+            var nodeNameMap = new Dictionary<PortSocketBinder, string>();
+            int nextNodeId = 1;
+            var groupsSnapshot = nodeGroups.GroupsSnapshot(); // <-- Use the new method here
+            foreach (var group in groupsSnapshot)
+            {
+                // If any port in the group is attached to a GroundNode, use "0"
+                bool isGround = group.Any(port =>
                 {
-                    foreach (var n in neigh)
-                        if (globalVisited.Add(n))
-                            q.Enqueue(n);
+                    var comp = port.GetComponentInParent<GroundNode>();
+                    return comp != null;
+                });
+                string nodeName = isGround ? "0" : $"N{nextNodeId++}";
+                foreach (var port in group)
+                    nodeNameMap[port] = nodeName;
+            }
+
+            // 3. For each component, get its ports and node names
+            var spiceComponents = new List<(CircuitComponentBase comp, string nodeA, string nodeB)>();
+            foreach (var comp in allComponents)
+            {
+                var ports = comp.GetPorts().ToArray();
+                if (ports.Length < 2) continue; // skip incomplete components
+                if (!nodeNameMap.TryGetValue(ports[0], out var nodeA) || !nodeNameMap.TryGetValue(ports[1], out var nodeB))
+                    continue;
+                spiceComponents.Add((comp, nodeA, nodeB));
+            }
+
+            // Debug: Print port assignments
+            foreach (var comp in allComponents)
+            {
+                var ports = comp.GetPorts().ToArray();
+                Debug.Log($"[DEBUG] {comp.componentId}: portA={ports.ElementAtOrDefault(0)?.name}, portB={ports.ElementAtOrDefault(1)?.name}");
+            }
+
+            // Debug: Print nodeNameMap snapshot
+            var nodeNameMapSnapshot = nodeNameMap.ToList();
+            foreach (var kvp in nodeNameMapSnapshot)
+            {
+                Debug.Log($"[NODEMAP_ID] PortSocketBinder {kvp.Key.name}({kvp.Key.GetInstanceID()}) => Node {kvp.Value}");
+            }
+
+            // Debug: Print component node mapping
+            foreach (var comp in allComponents)
+            {
+                var ports = comp.GetPorts().ToArray();
+                if (ports.Length < 2) continue;
+                string nodeA = nodeNameMap.ContainsKey(ports[0]) ? nodeNameMap[ports[0]] : "MISSING";
+                string nodeB = nodeNameMap.ContainsKey(ports[1]) ? nodeNameMap[ports[1]] : "MISSING";
+                Debug.Log($"[CHECK] {comp.componentId}: portA={ports[0]?.name}({nodeA}), portB={ports[1]?.name}({nodeB})");
+            }
+            foreach (var comp in allComponents)
+            {
+                var ports = comp.GetPorts().ToArray();
+                if (ports.Length < 2) continue;
+                string idA = ports[0] ? ports[0].GetInstanceID().ToString() : "null";
+                string idB = ports[1] ? ports[1].GetInstanceID().ToString() : "null";
+                Debug.Log($"[CHECK_ID] {comp.componentId}: portA={ports[0]?.name}({idA}), portB={ports[1]?.name}({idB})");
+            }
+
+            // 4. Group by connectivity (BFS as before)
+            _graph.Clear();
+            foreach (var (comp, nodeA, nodeB) in spiceComponents)
+            {
+                if (!_graph.ContainsKey(comp)) _graph[comp] = new List<CircuitComponentBase>();
+                // Find neighbors by shared node
+                foreach (var (other, otherA, otherB) in spiceComponents)
+                {
+                    if (other == comp) continue;
+                    if (nodeA == otherA || nodeA == otherB || nodeB == otherA || nodeB == otherB)
+                        _graph[comp].Add(other);
                 }
             }
 
-            // Does group have power?
-            var dc = group.OfType<DCSource>().FirstOrDefault();
-            bool hasCycle = HasCycleInGroup(group, _graph);
+            // 5. Find groups and simulate as before
+            var globalVisited = new HashSet<CircuitComponentBase>();
+            TurnAllLedsOff();
+            float highestVoltageSeen = 0f;
 
-            Debug.Log($"[CircuitManager] Group: {group.Count} items, DC={dc != null}, Cycle={hasCycle}");
+            foreach (var start in _graph.Keys)
+            {
+                if (globalVisited.Contains(start))
+                    continue;
 
-            if (dc == null || !hasCycle)
-                continue;
+                // BFS to get component group
+                var group = new List<CircuitComponentBase>();
+                var q = new Queue<CircuitComponentBase>();
+                q.Enqueue(start);
+                globalVisited.Add(start);
 
-            RunSpiceForGroup(group, dc);
+                while (q.Count > 0)
+                {
+                    var cur = q.Dequeue();
+                    group.Add(cur);
 
-            highestVoltageSeen = Mathf.Max(highestVoltageSeen, lastVoltage);
+                    if (_graph.TryGetValue(cur, out var neigh))
+                    {
+                        foreach (var n in neigh)
+                            if (globalVisited.Add(n))
+                                q.Enqueue(n);
+                    }
+                }
+
+                // Does group have power?
+                var dc = group.OfType<DCSource>().FirstOrDefault();
+                bool hasCycle = HasCycleInGroup(group, _graph);
+
+                Debug.Log($"[CircuitManager] Group: {group.Count} items, DC={dc != null}, Cycle={hasCycle}");
+
+                if (dc == null || !hasCycle)
+                    continue;
+
+                RunSpiceForGroupNetlist(group, spiceComponents, nodeNameMap);
+
+                highestVoltageSeen = Mathf.Max(highestVoltageSeen, lastVoltage);
+            }
+
+            lastVoltage = highestVoltageSeen;
+            Debug.Log($"[CircuitManager] Simulation complete — lastVoltage={lastVoltage:F3}V");
         }
-
-        lastVoltage = highestVoltageSeen;
-        Debug.Log($"[CircuitManager] Simulation complete — lastVoltage={lastVoltage:F3}V");
+        finally
+        {
+            _isRebuilding = false;
+        }
     }
 
-    // ------------------------- SPICE ENGINE ----------------------------
-
-    void RunSpiceForGroup(List<CircuitComponentBase> group, DCSource dcComponent)
+    // New netlist-based SPICE runner
+    void RunSpiceForGroupNetlist(List<CircuitComponentBase> group, List<(CircuitComponentBase comp, string nodeA, string nodeB)> spiceComponents, Dictionary<PortSocketBinder, string> nodeNameMap)
     {
         Debug.Log($"[CircuitManager] Running SPICE for group of {group.Count} components...");
 
         var ckt = new Circuit();
 
-        string ground = "0";
-        string n1 = "N1";
-        string n2 = "N2";
-
-        // DC source 0 -> N1
-        dcComponent.AddToSpice(ckt, ground, n1);
-
-        // Resistors N1 -> N2
-        foreach (var comp in group.OfType<Ohms>())
+        // Add all group components to the circuit
+        foreach (var (comp, nodeA, nodeB) in spiceComponents)
         {
-            comp.AddToSpice(ckt, n1, n2);
+            if (!group.Contains(comp)) continue;
+            if (comp is GroundNode) continue;
+            comp.AddToSpice(ckt, nodeA, nodeB);
         }
 
-        // LED N2 -> 0
-        foreach (var led in group.OfType<LED_Component>())
-        {
-            led.AddToSpice(ckt, n2, ground);
-        }
+        // --- DEBUG: Print Netlist ---
+        Debug.Log("[SPICE NETLIST]");
+        foreach (var entity in ckt)
+            Debug.Log(entity.ToString());
+
+        // Find a DC source in the group
+        var dcComponent = group.OfType<DCSource>().FirstOrDefault();
+        if (dcComponent == null) return;
 
         double vdc = dcComponent.voltage;
         var dc = new DC("dc", dcComponent.gameObject.name, vdc, vdc, 0.1);
@@ -171,26 +231,27 @@ public class CircuitManager : MonoBehaviour
         {
             foreach (var _ in dc.Run(ckt))
             {
-                double v0 = dc.GetVoltage(ground);
-                double vN1 = dc.GetVoltage(n1);
-                double vN2 = dc.GetVoltage(n2);
-
-                Debug.Log($"[SPICE DEBUG] V(0)  = {v0:F6} V");
-                Debug.Log($"[SPICE DEBUG] V(N1) = {vN1:F6} V");
-                Debug.Log($"[SPICE DEBUG] V(N2) = {vN2:F6} V");
-
-                float ledDrop = (float)(vN2 - v0);
-
-                foreach (var led in group.OfType<LED_Component>())
+                // Print voltages at each node
+                Debug.Log("[SPICE NODE VOLTAGES]");
+                foreach (var port in nodeNameMap.Keys.Distinct())
                 {
-                    led.UpdateLEDState(ledDrop);
-                    Debug.Log($"[SPICE] {led.gameObject.name} drop = {ledDrop:F6} V");
+                    double v = dc.GetVoltage(nodeNameMap[port]);
+                    Debug.Log($"{nodeNameMap[port]} ({port.name}): {v:F6} V");
                 }
 
-                lastVoltage = ledDrop;
+                // Update LEDs (if any)
+                foreach (var led in group.OfType<LED_Component>())
+                {
+                    var ports = led.GetPorts().ToArray();
+                    if (ports.Length < 2) continue;
+                    if (!nodeNameMap.TryGetValue(ports[0], out var nodeA) || !nodeNameMap.TryGetValue(ports[1], out var nodeB))
+                        continue;
+                    double vA = dc.GetVoltage(nodeA);
+                    double vB = dc.GetVoltage(nodeB);
+                    float ledDrop = (float)Mathf.Abs((float)(vA - vB));
+                    led.UpdateLEDState(ledDrop);
+                }
             }
-
-            Debug.Log($"[CircuitManager] Simulation complete — lastVoltage={lastVoltage:F3}V");
         }
         catch (System.Exception ex)
         {
@@ -201,8 +262,7 @@ public class CircuitManager : MonoBehaviour
 
 
 
-
-private List<CircuitComponentBase> BuildOrderedLoop(List<CircuitComponentBase> group, DCSource dc)
+    private List<CircuitComponentBase> BuildOrderedLoop(List<CircuitComponentBase> group, DCSource dc)
     {
         var visited = new HashSet<CircuitComponentBase>();
         var path = new List<CircuitComponentBase>();

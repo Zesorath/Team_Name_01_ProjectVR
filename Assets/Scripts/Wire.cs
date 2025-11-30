@@ -16,7 +16,8 @@ public class Wire : MonoBehaviour
     // The components currently connected at each end (via sockets)
     [NonSerialized] public CircuitComponentBase compA;
     [NonSerialized] public CircuitComponentBase compB;
-
+    [NonSerialized] public PortSocketBinder portA;
+    [NonSerialized] public PortSocketBinder portB;
     public bool IsComplete => compA != null && compB != null;
 
     private void Awake()
@@ -42,17 +43,19 @@ public class Wire : MonoBehaviour
     /// <summary>
     /// Called by a WireEnd when it gets plugged into a component socket.
     /// </summary>
-    public void NotifyEndConnected(WireEnd end, CircuitComponentBase comp)
+    public void NotifyEndConnected(WireEnd end, CircuitComponentBase comp, PortSocketBinder port)
     {
         if (end == endA)
         {
             compA = comp;
-            Debug.Log($"[Wire] {name}: endA -> {comp.componentId}");
+            portA = port;
+            Debug.Log($"[Wire] {name}: endA -> {comp.componentId}, PortSocketBinder={port?.name}");
         }
         else if (end == endB)
         {
             compB = comp;
-            Debug.Log($"[Wire] {name}: endB -> {comp.componentId}");
+            portB = port;
+            Debug.Log($"[Wire] {name}: endB -> {comp.componentId}, PortSocketBinder={port?.name}");
         }
         else
         {

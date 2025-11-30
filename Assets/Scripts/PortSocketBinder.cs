@@ -22,6 +22,8 @@ public class PortSocketBinder : MonoBehaviour
         socket.selectExited.AddListener(OnSelectExited);
 
         Debug.Log($"[PortSocketBinder] Ready on {owningComponent?.componentId ?? name}");
+        Debug.Log($"[PortSocketBinder] {name} instanceID={GetInstanceID()} on {owningComponent?.componentId}");
+
     }
 
     private void OnDestroy()
@@ -47,7 +49,8 @@ public class PortSocketBinder : MonoBehaviour
         }
 
         connectedEnd = end;
-        end.parentWire.NotifyEndConnected(end, owningComponent);
+        end.parentWire.NotifyEndConnected(end, owningComponent, this);
+
 
         if (CircuitManager.Instance != null)
         {
