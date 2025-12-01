@@ -59,4 +59,14 @@ public class LED_Component : CircuitComponentBase
 
         Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON ({t:P0})");
     }
+    public float CurrentVoltage
+    {
+        get { return currentVoltage; }
+        set
+        {
+            currentVoltage = value;
+            UpdateLEDState(currentVoltage);
+        }
+    }
+
 }

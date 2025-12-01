@@ -16,6 +16,8 @@ public class SaveManager : MonoBehaviour
         WIRE,
         POWER_SOURCE,
         RESISTOR,
+        LED,      
+        GROUND,    
         OTHER
     }
 
@@ -26,6 +28,8 @@ public class SaveManager : MonoBehaviour
             { Type.WIRE, 0 },
             { Type.POWER_SOURCE, 0 },
             { Type.RESISTOR, 0 },
+            { Type.LED, 0 },      
+            { Type.GROUND, 0 },   
             { Type.OTHER, 0 }
         };
 

@@ -28,16 +28,28 @@ public class SaveableObject : MonoBehaviour
     public ObjectState StoreObjectState()
     {
         ObjectState state = new ObjectState();
-        
+
         state.id = id;
         state.position = transform.position;
         state.rotation = transform.rotation;
-        
-        Direct_Current dc = GetComponent<Direct_Current>();
-        if (dc != null) {state.voltage = dc.voltage;}
+
+        DCSource dc = GetComponent<DCSource>();
+        if (dc != null) { state.voltage = dc.voltage; }
 
         Ohms res = GetComponent<Ohms>();
-        if (res != null) {state.resistance = res.resistance;}
+        if (res != null) { state.resistance = res.resistance; }
+
+        LED_Component led = GetComponent<LED_Component>();
+        if (led != null)
+        {
+            state.ledVoltage = led.CurrentVoltage;
+        }
+
+        
+        if (GetComponent<GroundNode>() != null)
+        {
+            state.isGround = true;
+        }
 
         return state;
     }
@@ -47,10 +59,18 @@ public class SaveableObject : MonoBehaviour
         transform.position = state.position;
         transform.rotation = state.rotation;
 
-        Direct_Current dc = GetComponent<Direct_Current>();
-        if (dc != null) {dc.voltage = state.voltage;}
+        DCSource dc = GetComponent<DCSource>();
+        if (dc != null) { dc.voltage = state.voltage; }
 
         Ohms res = GetComponent<Ohms>();
-        if (res != null) {res.resistance = state.resistance;}
+        if (res != null) { res.resistance = state.resistance; }
+
+        LED_Component led = GetComponent<LED_Component>();
+        if (led != null)
+        {
+            state.ledVoltage = led.CurrentVoltage;
+        }
+
+        
     }
 }
