@@ -1686,9 +1686,25 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 0}
     m_Modifications:
+    - target: {fileID: 1886318220035143925, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_Name
+      value: Start Scene
+      objectReference: {fileID: 0}
+    - target: {fileID: 2929809037849744952, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5433726532244841967, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_Name
+      value: Workshop
+      objectReference: {fileID: 0}
     - target: {fileID: 7775195922596776440, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
       propertyPath: m_Name
       value: UI
+      objectReference: {fileID: 0}
+    - target: {fileID: 8570098254196334325, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_Name
+      value: Back
       objectReference: {fileID: 0}
     - target: {fileID: 8867139494320689410, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
       propertyPath: m_LocalPosition.x
