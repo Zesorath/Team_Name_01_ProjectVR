@@ -2,7 +2,7 @@ using UnityEngine;
 
 /// Generates a 3D tube mesh between two Transforms (no physics).
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
-public class KinematicCableTube : MonoBehaviour
+public class CableWire : MonoBehaviour
 {
     public Transform endA;
     public Transform endB;
@@ -51,7 +51,7 @@ public class KinematicCableTube : MonoBehaviour
         {
             float t01 = i / (float)segments;
 
-            // Quadratic Bézier in LOCAL space
+            // Quadratic Bï¿½zier in LOCAL space
             Vector3 a = Vector3.Lerp(p0, p1, t01);
             Vector3 b = Vector3.Lerp(p1, p2, t01);
             Vector3 center = Vector3.Lerp(a, b, t01);
