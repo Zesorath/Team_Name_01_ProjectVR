@@ -5,7 +5,7 @@ public class ItemSpawner : MonoBehaviour
 {
 
     public GameObject Item_To_Spawn;
-    public float Respawn_Radius = 10.0f;
+    public float Respawn_Radius;
 
     private GameObject LastItem;
 
