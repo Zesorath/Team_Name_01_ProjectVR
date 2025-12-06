@@ -1,61 +1,57 @@
 using UnityEngine;
 using System;
-using System.Collections.Generic;
 
-/// <summary>
-/// Represents a single logical wire that can connect two components via two ends.
-/// The ends themselves are handled by WireEnd + XRGrab, but this class is what
-/// CircuitManager uses to build the adjacency graph.
-/// </summary>
 public class Wire : MonoBehaviour
 {
     [Header("Wire Ends (assign in Inspector)")]
-    public WireEnd endA;
-    public WireEnd endB;
+    public WireEnd startpoint;
+    public WireEnd endpoint;
 
-    // The components currently connected at each end (via sockets)
-    [NonSerialized] public CircuitComponentBase compA;
-    [NonSerialized] public CircuitComponentBase compB;
-    [NonSerialized] public PortSocketBinder portA;
-    [NonSerialized] public PortSocketBinder portB;
-    public bool IsComplete => compA != null && compB != null;
+    [NonSerialized] public CircuitComponentBase compStart;
+    [NonSerialized] public CircuitComponentBase compEnd;
+    [NonSerialized] public PortSocketBinder portStart;
+    [NonSerialized] public PortSocketBinder portEnd;
+    public bool IsComplete => compStart != null && compEnd != null;
+
+    public PortSocketBinder portA => portStart;
+    public PortSocketBinder portB => portEnd;
 
     private void Awake()
     {
-        // Make sure ends know their parent wire
-        if (endA != null)
+        if (startpoint != null)
         {
-            endA.parentWire = this;
-            endA.endLabel = "A";
+            startpoint.parentWire = this;
+            startpoint.endLabel = "Start";
+            startpoint.OnGrabStart += HandleGrabStart;
+            startpoint.OnGrabEnd += HandleGrabEnd;
         }
-        if (endB != null)
+        if (endpoint != null)
         {
-            endB.parentWire = this;
-            endB.endLabel = "B";
+            endpoint.parentWire = this;
+            endpoint.endLabel = "End";
+            endpoint.OnGrabStart += HandleGrabStart;
+            endpoint.OnGrabEnd += HandleGrabEnd;
         }
     }
 
     public (CircuitComponentBase, CircuitComponentBase) GetConnectionPair()
     {
-        return (compA, compB);
+        return (compStart, compEnd);
     }
 
-    /// <summary>
-    /// Called by a WireEnd when it gets plugged into a component socket.
-    /// </summary>
     public void NotifyEndConnected(WireEnd end, CircuitComponentBase comp, PortSocketBinder port)
     {
-        if (end == endA)
+        if (end == startpoint)
         {
-            compA = comp;
-            portA = port;
-            Debug.Log($"[Wire] {name}: endA -> {comp.componentId}, PortSocketBinder={port?.name}");
+            compStart = comp;
+            portStart = port;
+            Debug.Log($"[Wire] {name}: startpoint -> {comp.componentId}, PortSocketBinder={port?.name}");
         }
-        else if (end == endB)
+        else if (end == endpoint)
         {
-            compB = comp;
-            portB = port;
-            Debug.Log($"[Wire] {name}: endB -> {comp.componentId}, PortSocketBinder={port?.name}");
+            compEnd = comp;
+            portEnd = port;
+            Debug.Log($"[Wire] {name}: endpoint -> {comp.componentId}, PortSocketBinder={port?.name}");
         }
         else
         {
@@ -63,21 +59,46 @@ public class Wire : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Called by a WireEnd when it gets unplugged from a component socket.
-    /// </summary>
     public void NotifyEndDisconnected(WireEnd end, CircuitComponentBase comp)
     {
-        if (end == endA && compA == comp)
+        if (end == startpoint && compStart == comp)
         {
-            Debug.Log($"[Wire] {name}: endA disconnected from {comp.componentId}");
-            compA = null;
+            Debug.Log($"[Wire] {name}: startpoint disconnected from {comp.componentId}");
+            compStart = null;
         }
-        else if (end == endB && compB == comp)
+        else if (end == endpoint && compEnd == comp)
         {
-            Debug.Log($"[Wire] {name}: endB disconnected from {comp.componentId}");
-            compB = null;
+            Debug.Log($"[Wire] {name}: endpoint disconnected from {comp.componentId}");
+            compEnd = null;
         }
+    }
+
+    // Movement logic
+    private void HandleGrabStart(WireEnd grabbedEnd)
+    {
+        // If neither end is plugged in, move the parent wire
+        if (compStart == null && compEnd == null)
+        {
+            // Move parent wire (and both ends)
+            grabbedEnd.SetMoveMode(WireEnd.MoveMode.ParentWire);
+        }
+        // If one end is plugged in, move only the free end
+        else if ((grabbedEnd == startpoint && compStart == null) ||
+                 (grabbedEnd == endpoint && compEnd == null))
+        {
+            grabbedEnd.SetMoveMode(WireEnd.MoveMode.FreeEnd);
+        }
+        else
+        {
+            // This end is plugged in, do not allow movement
+            grabbedEnd.SetMoveMode(WireEnd.MoveMode.Locked);
+        }
+    }
+
+    private void HandleGrabEnd(WireEnd grabbedEnd)
+    {
+        // Reset move mode when grab ends
+        grabbedEnd.SetMoveMode(WireEnd.MoveMode.None);
     }
 
     private void OnDestroy()
