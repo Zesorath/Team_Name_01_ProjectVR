@@ -1,6 +1,8 @@
 using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
+[assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 [DefaultExecutionOrder(-100)]
 public class SaveManager : MonoBehaviour
@@ -34,7 +36,7 @@ public class SaveManager : MonoBehaviour
         };
 
     }
-    
+
     // Generate a unique identifier for components spawned in at runtime, using 
     // the individual type counters. Call this in SaveableObject
     public string GenerateID(Type type)
@@ -88,6 +90,7 @@ public class SaveManager : MonoBehaviour
         }
     }
 
+    // Initialize in play mode
     void Awake()
     {
         Instance = this;
@@ -163,4 +166,19 @@ public class SaveManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F5)) Save();
         if (Input.GetKeyDown(KeyCode.F9)) Load();
     }
+
+    // Expose private items for unit tests
+        
+    // Initialize counters for testing
+    internal void TestInit_TypeCounters()
+    {
+        InitTypeCounters();
+    }
+
+    // Initialize empty saveablesKeyed dictionary for testing
+    internal void TestInit_SaveablesDict()
+    {
+        saveablesKeyed = new Dictionary<string, SaveableObject>();
+    }
+
 }
