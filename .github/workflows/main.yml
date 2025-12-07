@@ -5,6 +5,7 @@ on:
     branches:
       - staging
       - main
+      - save-data
   pull_request:
 
 concurrency:
