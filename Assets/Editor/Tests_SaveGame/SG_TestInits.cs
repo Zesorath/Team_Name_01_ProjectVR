@@ -1,8 +1,9 @@
+using System;
 using UnityEngine;
 
 public static class SG_TestInits
 {
-    public static SaveManager Create_SaveManager()
+    public static SaveManager Create_TestSaveManager()
     {
         GameObject go = new GameObject("SaveManager");
         SaveManager sm = go.AddComponent<SaveManager>();
@@ -11,11 +12,12 @@ public static class SG_TestInits
         return sm;
     }
 
-    public static SaveableObject Create_SaveableObject(SaveManager sm, string n)
+    public static SaveableObject Create_TestSaveableObject(
+        SaveManager sm, Boolean generateID = true)
     {
         GameObject go = new GameObject("Obj");
         SaveableObject so = go.AddComponent<SaveableObject>();
-        so.id = n;
+        if (generateID == true) {so.id = Guid.NewGuid();}
 
         return so;
     }

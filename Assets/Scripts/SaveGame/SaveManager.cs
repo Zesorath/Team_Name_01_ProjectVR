@@ -2,6 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 [DefaultExecutionOrder(-100)]
@@ -11,7 +12,7 @@ public class SaveManager : MonoBehaviour
     private SaveData currentSave;
 
     Dictionary<Type, int> typeCounters;
-    public Dictionary<string, SaveableObject> saveablesKeyed;
+    public Dictionary<Guid, SaveableObject> saveablesKeyed;
 
     public enum Type
     {
@@ -34,15 +35,14 @@ public class SaveManager : MonoBehaviour
             { Type.GROUND, 0 },   
             { Type.OTHER, 0 }
         };
-
     }
 
     // Generate a unique identifier for components spawned in at runtime, using 
     // the individual type counters. Call this in SaveableObject
-    public string GenerateID(Type type)
+    public string GenerateLabel(Type type)
     {
         int index = typeCounters[type];
-        typeCounters[type] += 1;
+        typeCounters[type]++;
 
         return $"{type}_{index}";
     }
@@ -53,15 +53,16 @@ public class SaveManager : MonoBehaviour
         // saveablesKeyed not yet initialized
         if (saveablesKeyed == null)
         {
-            saveablesKeyed = new Dictionary<string, SaveableObject>();
+            saveablesKeyed = new Dictionary<Guid, SaveableObject>();
         }
 
         // obj has no ID--don't save
-        if (string.IsNullOrEmpty(obj.id))
+        if (obj.id == Guid.Empty)
         {
             Debug.LogWarning(
-                $"SaveableObject {obj.gameObject.name} has empty id--not saved"
+                $"SaveableObject {obj.gameObject.name} has empty id"
             );
+            Debug.LogWarning($"-- not registered");
             return;
         }
 
@@ -69,8 +70,9 @@ public class SaveManager : MonoBehaviour
         if (saveablesKeyed.ContainsKey(obj.id))
         {
             Debug.LogWarning(
-                $"SaveableObject with id {obj.id} already exists--not saved"
+                $"SaveableObject with id {obj.id} already exists"
             );
+            Debug.LogWarning($"-- not registered");
             return;
         }
 
@@ -124,17 +126,17 @@ public class SaveManager : MonoBehaviour
         }
 
         // Build the set of saved IDs
-        HashSet<string> savedIds = new HashSet<string>();
+        HashSet<Guid> savedIds = new HashSet<Guid>();
         foreach (var state in currentSave.objStates)
         {
-            if (!string.IsNullOrEmpty(state.id)) savedIds.Add(state.id);
+            if (state.id == Guid.Empty) savedIds.Add(state.id);
         }
 
         // Iterate over a copy of saveablesKeyed, delete objects that have been 
         // spawned since last save
         foreach (var pair in saveablesKeyed.ToList())
         {
-            string id = pair.Key;
+            Guid id = pair.Key;
             SaveableObject obj = pair.Value;
 
             if (!savedIds.Contains(id))
@@ -178,7 +180,7 @@ public class SaveManager : MonoBehaviour
     // Initialize empty saveablesKeyed dictionary for testing
     internal void TestInit_SaveablesDict()
     {
-        saveablesKeyed = new Dictionary<string, SaveableObject>();
+        saveablesKeyed = new Dictionary<Guid, SaveableObject>();
     }
 
 }

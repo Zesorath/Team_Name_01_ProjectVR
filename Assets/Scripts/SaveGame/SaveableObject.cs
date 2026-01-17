@@ -1,8 +1,10 @@
+using System;
 using UnityEngine;
 
 public class SaveableObject : MonoBehaviour
 {
-    public string id;
+    public Guid id;
+    public string label;
 
     void Awake()
     {
@@ -10,7 +12,7 @@ public class SaveableObject : MonoBehaviour
         if (SaveManager.Instance == null) return;        
         
         // Only set a new ID if it is empty--e.g., pre-existing level components
-        if (string.IsNullOrEmpty(id))
+        if (id == Guid.Empty)
         {
             ComponentType ct = GetComponent<ComponentType>();
             SaveManager.Type type = SaveManager.Type.OTHER; // Default value
@@ -18,7 +20,8 @@ public class SaveableObject : MonoBehaviour
             // ComponentType found
             if (ct != null) type = ct.type;
 
-            id = SaveManager.Instance.GenerateID(type);
+            id = Guid.NewGuid();
+            label = SaveManager.Instance.GenerateLabel(type);
         }
 
         // Register the object
@@ -30,6 +33,7 @@ public class SaveableObject : MonoBehaviour
         ObjectState state = new ObjectState();
 
         state.id = id;
+        state.label = label;
         state.position = transform.position;
         state.rotation = transform.rotation;
 
@@ -69,8 +73,6 @@ public class SaveableObject : MonoBehaviour
         if (led != null)
         {
             state.ledVoltage = led.CurrentVoltage;
-        }
-
-        
+        }        
     }
 }

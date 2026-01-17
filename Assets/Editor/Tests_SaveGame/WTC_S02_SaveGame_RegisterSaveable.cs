@@ -7,8 +7,8 @@ public class WTC_S02_SaveGame_RegisterSaveable
     [Test]
     public void WTC_S02_01_DictionaryInitializesImplicitly()
     {
-        SaveManager sm = SG_TestInits.Create_SaveManager();
-        SaveableObject so = SG_TestInits.Create_SaveableObject(sm, "TEST_0");
+        SaveManager sm = SG_TestInits.Create_TestSaveManager();
+        SaveableObject so = SG_TestInits.Create_TestSaveableObject(sm);
 
         sm.RegisterSaveable(so);
 
@@ -16,18 +16,18 @@ public class WTC_S02_SaveGame_RegisterSaveable
         Assert.IsNotNull(sm.saveablesKeyed);
 
         // SaveableObject was added to the dictionary
-        Assert.IsTrue(sm.saveablesKeyed.ContainsKey("TEST_0"));
+        Assert.IsTrue(sm.saveablesKeyed.ContainsKey(so.id));
     }
 
     [Test]
     public void WTC_S02_02_RejectsEmptyID()
     {
-        SaveManager sm = SG_TestInits.Create_SaveManager();
-        SaveableObject so = SG_TestInits.Create_SaveableObject(sm, "");
+        SaveManager sm = SG_TestInits.Create_TestSaveManager();
+        SaveableObject so = SG_TestInits.Create_TestSaveableObject(sm, false);
 
         // Expect console warning that the unnamed object could not register
         LogAssert.Expect(LogType.Warning, 
-            "SaveableObject Obj has empty id--not saved");
+            "SaveableObject Obj has empty id");
         sm.RegisterSaveable(so);
         
         // Dictionary initialized, but nothing added
@@ -37,15 +37,19 @@ public class WTC_S02_SaveGame_RegisterSaveable
     [Test]
     public void WTC_S02_03_RejectsDuplicateID()
     {
-        SaveManager sm = SG_TestInits.Create_SaveManager();
-        SaveableObject so1 = SG_TestInits.Create_SaveableObject(sm, "LED_0");
-        SaveableObject so2 = SG_TestInits.Create_SaveableObject(sm, "LED_0");
+        SaveManager sm = SG_TestInits.Create_TestSaveManager();
+        SaveableObject so1 = SG_TestInits.Create_TestSaveableObject(sm);
+
+        // Create duplicate SaveableObject
+        GameObject go = new GameObject("Duplicate SaveableObject");
+        SaveableObject so2 = go.AddComponent<SaveableObject>();
+        so2 = so1;
 
         sm.RegisterSaveable(so1);   // This line will succeed
 
         // Expect this to be the next console output of type Warning
         LogAssert.Expect(LogType.Warning, 
-            "SaveableObject with id LED_0 already exists--not saved");
+            $"SaveableObject with id {so1.id} already exists");
         sm.RegisterSaveable(so2);   // This line should fail and log failure
 
         // Only the first object registered
@@ -55,11 +59,11 @@ public class WTC_S02_SaveGame_RegisterSaveable
     [Test]
     public void WTC_S02_04_AcceptsValidID()
     {
-        SaveManager sm = SG_TestInits.Create_SaveManager();
-        SaveableObject so = SG_TestInits.Create_SaveableObject(sm, "LED_0");
+        SaveManager sm = SG_TestInits.Create_TestSaveManager();
+        SaveableObject so = SG_TestInits.Create_TestSaveableObject(sm);
 
         sm.RegisterSaveable(so);
 
-        Assert.IsTrue(sm.saveablesKeyed.ContainsKey("LED_0"));
+        Assert.IsTrue(sm.saveablesKeyed.ContainsKey(so.id));
     }
 }
