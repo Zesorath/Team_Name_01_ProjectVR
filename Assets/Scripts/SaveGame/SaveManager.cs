@@ -1,186 +1,169 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 using System;
+using System.IO;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
-[DefaultExecutionOrder(-100)]
-public class SaveManager : MonoBehaviour
+public class SaveManager
 {
-    public static SaveManager Instance { get; private set; }
-    private SaveData currentSave;
-
-    Dictionary<Type, int> typeCounters;
-    public Dictionary<Guid, SaveableObject> saveablesKeyed;
-
-    public enum Type
+    public static SaveManager Instance { get; } = new SaveManager();
+    public readonly ComponentTypes types;
+    SaveData saveData;
+    class SaveData
     {
-        WIRE,
-        POWER_SOURCE,
-        RESISTOR,
-        LED,      
-        GROUND,    
-        OTHER
-    }
-
-    void InitTypeCounters()
-    {
-        typeCounters = new Dictionary<Type, int>
-        {
-            { Type.WIRE, 0 },
-            { Type.POWER_SOURCE, 0 },
-            { Type.RESISTOR, 0 },
-            { Type.LED, 0 },      
-            { Type.GROUND, 0 },   
-            { Type.OTHER, 0 }
-        };
-    }
-
-    // Generate a unique identifier for components spawned in at runtime, using 
-    // the individual type counters. Call this in SaveableObject
-    public string GenerateLabel(Type type)
-    {
-        int index = typeCounters[type];
-        typeCounters[type]++;
-
-        return $"{type}_{index}";
-    }
-
-    // Add new SaveableObject to saveablesKeyed
-    public void RegisterSaveable(SaveableObject obj)
-    {
-        // saveablesKeyed not yet initialized
-        if (saveablesKeyed == null)
-        {
-            saveablesKeyed = new Dictionary<Guid, SaveableObject>();
-        }
-
-        // obj has no ID--don't save
-        if (obj.id == Guid.Empty)
-        {
-            Debug.LogWarning(
-                $"SaveableObject {obj.gameObject.name} has empty id"
-            );
-            Debug.LogWarning($"-- not registered");
-            return;
-        }
-
-        // obj with the current ID already exists
-        if (saveablesKeyed.ContainsKey(obj.id))
-        {
-            Debug.LogWarning(
-                $"SaveableObject with id {obj.id} already exists"
-            );
-            Debug.LogWarning($"-- not registered");
-            return;
-        }
-
-        // Otherwise, go ahead and add the SaveableObject
-        saveablesKeyed.Add(obj.id, obj);
-    }
-    void CatalogStartingObjects()
-    {
-        // Find all the SaveableObjects in the scene
-        SaveableObject[] saveablesRaw = FindObjectsByType<SaveableObject>(
-            FindObjectsSortMode.None
-        );
+        internal string fileName = "saveFile.json";
+        internal Guid saveID;
+        internal Dictionary<Guid, ObjectState> objectStates;
         
-        foreach (var s in saveablesRaw)
+        internal SaveData()
         {
-            RegisterSaveable(s);
+            saveID = Guid.NewGuid();
+            objectStates = new Dictionary<Guid, ObjectState>();
+        }
+    }
+    
+    SaveManager() 
+    { 
+        types = new ComponentTypes();
+        saveData = new SaveData();
+    }
+
+    [Serializable]
+    class SaveData_Serialized : ISerializationCallbackReceiver
+    {
+        public string saveID;
+        public List<Entry> objectStates = new List<Entry>();
+        
+        [Serializable]
+        public class Entry
+        {
+            public string id = "";
+            public ObjectState state;
+        }
+
+        public void OnBeforeSerialize()
+        {
+            saveID = Instance.saveData.saveID.ToString();
+
+            objectStates.Clear();
+            foreach (var kvp in Instance.saveData.objectStates)
+            {
+                objectStates.Add(new Entry { id=kvp.Key.ToString(), state=kvp.Value });
+            }
+            Debug.Log($"Serialized {objectStates.Count} objects");
+        }
+
+        public void OnAfterDeserialize()
+        {
+            Dictionary<Guid,ObjectState> s = Instance.saveData.objectStates;
+            if (s == null) 
+            {
+                s = new Dictionary<Guid, ObjectState>();
+                Instance.saveData.objectStates = s; 
+            }
+
+            // Use min length just for safety. They should be the same length
+            for (int i = 0; i < objectStates.Count; i++)
+            {
+                // var val = JsonUtility.FromJson<ObjectState>(states[i]);
+                // s.Add(Guid.Parse(ids[i]), val);
+            }
         }
     }
 
-    // Initialize in play mode
-    void Awake()
+    public StatusCode Register(ComponentID cID)
     {
-        Instance = this;
-        InitTypeCounters();
-        CatalogStartingObjects();
+        Debug.Log($"[SaveManager]: Attempting to register component {cID.id}");
+        // Gatekeeping
+        if (cID.id == Guid.Empty) return StatusCode.ERROR_ID_GEN_FAILED;
+        if (saveData.objectStates.ContainsKey(cID.id))
+            return StatusCode.ERROR_DUPLICATE_ID;
+        
+        // Register the new component
+        ObjectState newObjectState = new ObjectState();
+        newObjectState.Build_ObjectState(cID);
+        saveData.objectStates.Add(cID.id, newObjectState);
+        Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
+        return StatusCode.SUCCESS;
     }
 
-    // Build SaveData
+    [Serializable]
+    class ObjectState
+    {
+        public ComponentTypes.Types type = ComponentTypes.Types.DEFAULT;
+        public int index = 0;
+        public string label = "NO_LABEL";
+        public Vector3 position = Vector3.zero;
+        public Quaternion rotation = Quaternion.identity;
+        public float voltage = 0;
+        public float resistance = 0;
+        public float ledVoltage = 0;
+        public bool isGround = false;
+
+        internal StatusCode Build_ObjectState(ComponentID cID)
+        {
+            Debug.Log($"Building component {cID.id}");
+            
+            if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
+            
+            label = cID.label;
+            type = cID.type;
+            index = cID.index;
+            
+            if (cID.gameObject == null)
+                return StatusCode.ERROR_MISSING_GAME_OBJECT;
+            GameObject go = cID.gameObject;
+
+            position = go.transform.position;
+            rotation = go.transform.rotation;
+
+            DCSource dc = go.GetComponent<DCSource>();
+            if (dc != null) { voltage = dc.voltage; }
+
+            Ohms res = go.GetComponent<Ohms>();
+            if (res != null) { resistance = res.resistance; }
+
+            LED_Component led = go.GetComponent<LED_Component>();
+            if (led != null) { ledVoltage = led.CurrentVoltage; }
+
+            if (go.GetComponent<GroundNode>() != null) { isGround = true; }
+
+            return StatusCode.SUCCESS;
+        }
+
+        // REWRITE FOR LOAD()
+        internal StatusCode Apply_ObjectState() { return StatusCode.SUCCESS; }
+
+        public void OLD_Apply_ObjectState(GameObject go)
+        {
+            go.transform.position = position;
+            go.transform.rotation = rotation;
+
+            DCSource dc = go.GetComponent<DCSource>();
+            if (dc != null) { dc.voltage = voltage; }
+
+            Ohms res = go.GetComponent<Ohms>();
+            if (res != null) { res.resistance = resistance; }
+
+            LED_Component led = go.GetComponent<LED_Component>();
+            if (led != null) { led.CurrentVoltage = ledVoltage; }
+        }
+    }
+
     public void Save()
-    {
-        currentSave = new SaveData();
-        currentSave.objStates = new List<ObjectState>();
+    {       
+        string path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Instance.saveData.fileName
+        );
 
-        foreach (var obj in saveablesKeyed)
-        {
-            SaveableObject saveable = obj.Value;
-            ObjectState state = saveable.StoreObjectState();
-            currentSave.objStates.Add(state);
-        }
+        SaveData_Serialized s = new SaveData_Serialized();
 
-        Debug.Log("Saved" + currentSave.objStates.Count + " objects.");
+        StreamWriter writer = new StreamWriter(path, append: false);
+        writer.WriteLine(JsonUtility.ToJson(s, true));
+        writer.Close();
     }
 
-    // Apply SaveData
-    public void Load()
-    {
-        if (currentSave == null)
-        {
-            Debug.LogWarning("No save data to load");
-            return;
-        }
-
-        // Build the set of saved IDs
-        HashSet<Guid> savedIds = new HashSet<Guid>();
-        foreach (var state in currentSave.objStates)
-        {
-            if (state.id == Guid.Empty) savedIds.Add(state.id);
-        }
-
-        // Iterate over a copy of saveablesKeyed, delete objects that have been 
-        // spawned since last save
-        foreach (var pair in saveablesKeyed.ToList())
-        {
-            Guid id = pair.Key;
-            SaveableObject obj = pair.Value;
-
-            if (!savedIds.Contains(id))
-            {
-                // Delete the object
-                if (obj != null) Destroy(obj.gameObject);
-                saveablesKeyed.Remove(id);
-            }
-        }
-
-        // Apply SaveData
-        foreach (var state in currentSave.objStates)
-        {
-            if (saveablesKeyed.TryGetValue(state.id, out SaveableObject saveable))
-            {
-                saveable.ApplyObjectState(state);
-            }
-            else
-            {
-                Debug.LogWarning($"No SaveableObject with id {state.id}");
-            }
-        }
-
-        Debug.Log("Loaded " + currentSave.objStates.Count + " objects.");
-    }
-
-    void Update()
-    {
-        if (Input.GetKeyDown(KeyCode.F5)) Save();
-        if (Input.GetKeyDown(KeyCode.F9)) Load();
-    }
-
-    // Expose private items for unit tests
-        
-    // Initialize counters for testing
-    internal void TestInit_TypeCounters()
-    {
-        InitTypeCounters();
-    }
-
-    // Initialize empty saveablesKeyed dictionary for testing
-    internal void TestInit_SaveablesDict()
-    {
-        saveablesKeyed = new Dictionary<Guid, SaveableObject>();
-    }
-
+    public void Load() {}
 }
