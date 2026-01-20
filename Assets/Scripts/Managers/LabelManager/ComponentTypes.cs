@@ -11,6 +11,8 @@ public class ComponentTypes
     {
         DEFAULT,
         WIRE,
+        WIRE_START,
+        WIRE_END,
         POWER_SOURCE,
         RESISTOR,
         LED,      

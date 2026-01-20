@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class HotKeys : MonoBehaviour
+public class InputManager : MonoBehaviour
 {
     /// <summary>
     /// Register all hotkeys
