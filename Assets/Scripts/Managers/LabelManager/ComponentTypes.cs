@@ -22,14 +22,8 @@ public class ComponentTypes
     }
 
     /// <summary>
-    /// 
-    /// REWRITE THIS
-    /// 
-    /// Runs on load scene
-    /// 
-    /// Creates static ComponentTypes instance. Initializes counter for each
-    /// component type to zero and name to the enum constant, converted to
-    /// lowercase.
+    /// Initializes counter for each component type to zero and name to the enum
+    /// constant, converted to lowercase.
     /// </summary>
     public ComponentTypes()
     {
@@ -51,8 +45,6 @@ public class ComponentTypes
     /// <summary>
     /// Exposes next available index for specified type for label suggestion.
     /// </summary>
-    /// <param name="type"></param>
-    /// <returns></returns>
     public int GetNextTypeIndex(Types type)
     {
         typeCounters[(int)type]++;
@@ -62,7 +54,5 @@ public class ComponentTypes
     /// <summary>
     /// Exposes specified type name
     /// </summary>
-    /// <param name="type"></param>
-    /// <returns></returns>
     public string GetTypeName(Types type) { return typeNames[(int)type]; }
 }

@@ -1,5 +1,8 @@
 using UnityEngine;
 
+/// <summary>
+/// Listens for hotkey presses
+/// </summary>
 public class InputManager : MonoBehaviour
 {
     /// <summary>

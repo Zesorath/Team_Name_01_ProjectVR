@@ -10,31 +10,99 @@ public class SaveManager
     public static SaveManager Instance { get; } = new SaveManager();
     public readonly ComponentTypes types;
     SaveData saveData;
-    class SaveData
-    {
-        internal string fileName = "saveFile.json";
-        internal Guid saveID;
-        internal Dictionary<Guid, ObjectState> objectStates;
-        
-        internal SaveData()
-        {
-            saveID = Guid.NewGuid();
-            objectStates = new Dictionary<Guid, ObjectState>();
-        }
-    }
-    
+
+    // SaveManager METHODS
+
+    /// <summary>
+    /// SaveManager constructor. Initializes type counters/name strings (might 
+    /// toss the names list later on) and empty saveData object.
+    /// </summary>
     SaveManager() 
     { 
         types = new ComponentTypes();
         saveData = new SaveData();
     }
 
+    /// <summary>
+    /// Used by ComponentID. Each component registers itself with the save 
+    /// manager upon spawn.
+    /// </summary>
+    public StatusCode Register(ComponentID cID)
+    {
+        Debug.Log($"[SaveManager]: Attempting to register component {cID.id}");
+        // Gatekeeping
+        if (cID.id == Guid.Empty) return StatusCode.ERROR_ID_GEN_FAILED;
+        if (saveData.objectStates.ContainsKey(cID.id))
+            return StatusCode.ERROR_DUPLICATE_ID;
+        
+        // Register the new component
+        ObjectState newObjectState = new ObjectState();
+        newObjectState.Build_ObjectState(cID);
+        saveData.objectStates.Add(cID.id, newObjectState);
+        Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
+        return StatusCode.SUCCESS;
+    }
+    
+    /// <summary>
+    /// Saves the current scene to a JSON file on the user's desktop.
+    /// </summary>
+    public void Save()
+    {       
+        string path = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Instance.saveData.fileName
+        );
+
+        SaveData_Serialized s = new SaveData_Serialized();
+
+        StreamWriter writer = new StreamWriter(path, append: false);
+        writer.WriteLine(JsonUtility.ToJson(s, true));
+        writer.Close();
+    }
+
+    // TODO: Finish
+    /// <summary>
+    /// Loads a saved scene from a JSON file on the user's desktop.
+    /// </summary>
+    public void Load() {}
+
+
+    // HELPER CLASSES
+
+    /// <summary>
+    /// Contains the name and unique ID of the save file, and a dictionary of
+    /// ObjectStates indexed by ComponentID.id (a GUID).
+    /// </summary>
+    class SaveData
+    {
+        internal string fileName = "saveFile.json";
+        internal Guid saveID;
+        internal Dictionary<Guid, ObjectState> objectStates;
+        
+        /// <summary>
+        /// SaveData constructor
+        /// </summary>
+        internal SaveData()
+        {
+            saveID = Guid.NewGuid();
+            objectStates = new Dictionary<Guid, ObjectState>();
+        }
+    }
+
+    /// <summary>
+    /// saveData formatted for automatic JSON serialization
+    /// </summary>
     [Serializable]
     class SaveData_Serialized : ISerializationCallbackReceiver
     {
         public string saveID;
         public List<Entry> objectStates = new List<Entry>();
         
+        /// <summary>
+        /// ToJson() doesn't support Dictionaries, but it can handle a list of
+        /// instances of a custom class with all serializable fields. Entry acts
+        /// as a key, value pair for serialization.
+        /// </summary>
         [Serializable]
         public class Entry
         {
@@ -42,6 +110,10 @@ public class SaveManager
             public ObjectState state;
         }
 
+        /// <summary>
+        /// Convert saveID from GUID to string and saveData.objectStates from 
+        /// Dictionary<Guid, ObjectState> to List<Entry>
+        /// </summary>
         public void OnBeforeSerialize()
         {
             saveID = Instance.saveData.saveID.ToString();
@@ -49,11 +121,16 @@ public class SaveManager
             objectStates.Clear();
             foreach (var kvp in Instance.saveData.objectStates)
             {
-                objectStates.Add(new Entry { id=kvp.Key.ToString(), state=kvp.Value });
+                objectStates.Add(
+                    new Entry { id=kvp.Key.ToString(), state=kvp.Value });
             }
             Debug.Log($"Serialized {objectStates.Count} objects");
         }
 
+        // TODO: Finish
+        /// <summary>
+        /// Convert saveID back to GUID and objectStates back to a dictionary
+        /// </summary>
         public void OnAfterDeserialize()
         {
             Dictionary<Guid,ObjectState> s = Instance.saveData.objectStates;
@@ -72,22 +149,10 @@ public class SaveManager
         }
     }
 
-    public StatusCode Register(ComponentID cID)
-    {
-        Debug.Log($"[SaveManager]: Attempting to register component {cID.id}");
-        // Gatekeeping
-        if (cID.id == Guid.Empty) return StatusCode.ERROR_ID_GEN_FAILED;
-        if (saveData.objectStates.ContainsKey(cID.id))
-            return StatusCode.ERROR_DUPLICATE_ID;
-        
-        // Register the new component
-        ObjectState newObjectState = new ObjectState();
-        newObjectState.Build_ObjectState(cID);
-        saveData.objectStates.Add(cID.id, newObjectState);
-        Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
-        return StatusCode.SUCCESS;
-    }
 
+    /// <summary>
+    /// Stores the state of a single component for saving/loading
+    /// </summary>
     [Serializable]
     class ObjectState
     {
@@ -101,6 +166,10 @@ public class SaveManager
         public float ledVoltage = 0;
         public bool isGround = false;
 
+        /// <summary>
+        /// Populates ObjectState fields from a ComponentID and its GameObject's
+        /// relevant components.
+        /// </summary>
         internal StatusCode Build_ObjectState(ComponentID cID)
         {
             Debug.Log($"Building component {cID.id}");
@@ -151,19 +220,5 @@ public class SaveManager
         }
     }
 
-    public void Save()
-    {       
-        string path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Instance.saveData.fileName
-        );
-
-        SaveData_Serialized s = new SaveData_Serialized();
-
-        StreamWriter writer = new StreamWriter(path, append: false);
-        writer.WriteLine(JsonUtility.ToJson(s, true));
-        writer.Close();
-    }
-
-    public void Load() {}
+    
 }
