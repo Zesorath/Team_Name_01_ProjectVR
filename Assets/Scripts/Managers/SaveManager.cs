@@ -48,6 +48,7 @@ public class SaveManager
     /// </summary>
     public void Save()
     {       
+        Debug.Log("Load() called");
         string path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
             Instance.saveData.fileName
@@ -64,7 +65,7 @@ public class SaveManager
     /// <summary>
     /// Loads a saved scene from a JSON file on the user's desktop.
     /// </summary>
-    public void Load() {}
+    public void Load() { Debug.Log("Load() called"); }
 
 
     // HELPER CLASSES
@@ -149,7 +150,6 @@ public class SaveManager
         }
     }
 
-
     /// <summary>
     /// Stores the state of a single component for saving/loading
     /// </summary>
@@ -201,7 +201,7 @@ public class SaveManager
             return StatusCode.SUCCESS;
         }
 
-        // REWRITE FOR LOAD()
+        // Will be used by load. I need to finish rewriting this
         internal StatusCode Apply_ObjectState() { return StatusCode.SUCCESS; }
 
         public void OLD_Apply_ObjectState(GameObject go)

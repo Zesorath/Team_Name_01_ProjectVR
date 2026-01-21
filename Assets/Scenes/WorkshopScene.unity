@@ -1621,7 +1621,7 @@ GameObject:
   - component: {fileID: 1196893153}
   - component: {fileID: 1196893152}
   m_Layer: 0
-  m_Name: HotKeys
+  m_Name: InputManager
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
