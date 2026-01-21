@@ -48,7 +48,7 @@ public class SaveManager
     /// </summary>
     public void Save()
     {       
-        Debug.Log("Load() called");
+        Debug.Log("Save() called");
         string path = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
             Instance.saveData.fileName
