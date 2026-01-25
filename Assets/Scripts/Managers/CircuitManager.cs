@@ -66,12 +66,35 @@ public class CircuitManager : MonoBehaviour
 
             // 1. Build node groups using union-find
             var nodeGroups = new DisjointSet<PortSocketBinder>();
+
+            // 1a. Union complete wires
             foreach (var wire in wires)
             {
                 if (!wire || !wire.IsComplete) continue;
+
                 var (a, b) = (wire.portA, wire.portB);
                 if (a != null && b != null)
                     nodeGroups.Union(a, b);
+            }
+
+            // 1b. Ensure all ports exist in the disjoint set
+            foreach (var p in allPorts)
+            {
+                if (p != null)
+                    nodeGroups.Find(p); // auto-add singleton ports
+            }
+
+            // 1c. Treat CLOSED switches like wires
+            foreach (var sw in allComponents.OfType<SwitchComponent>())
+            {
+                if (!sw.IsClosed)
+                    continue;
+
+                var ports = sw.GetPorts().ToArray();
+                if (ports.Length < 2 || ports[0] == null || ports[1] == null)
+                    continue;
+
+                nodeGroups.Union(ports[0], ports[1]);
             }
 
             // 2. Assign node names (deep snapshot to avoid modification during enumeration)
@@ -95,10 +118,22 @@ public class CircuitManager : MonoBehaviour
             var spiceComponents = new List<(CircuitComponentBase comp, string nodeA, string nodeB)>();
             foreach (var comp in allComponents)
             {
-                var ports = comp.GetPorts().ToArray();
-                if (ports.Length < 2) continue; // skip incomplete components
-                if (!nodeNameMap.TryGetValue(ports[0], out var nodeA) || !nodeNameMap.TryGetValue(ports[1], out var nodeB))
+                // Skip OPEN switches so they don't connect the graph/netlist
+                if (comp is SwitchComponent sw && !sw.IsClosed)
                     continue;
+
+                var ports = comp.GetPorts().ToArray();
+                if (ports.Length < 2) continue;
+
+                if (!nodeNameMap.TryGetValue(ports[0], out var nodeA) ||
+                    !nodeNameMap.TryGetValue(ports[1], out var nodeB))
+                    continue;
+
+                // Optional: if a CLOSED switch merged both ports into same node, nodeA == nodeB.
+                // Skipping avoids weird "component between same node" situations.
+                if (nodeA == nodeB)
+                    continue;
+
                 spiceComponents.Add((comp, nodeA, nodeB));
             }
 
@@ -233,10 +268,22 @@ public class CircuitManager : MonoBehaviour
             {
                 // Print voltages at each node
                 Debug.Log("[SPICE NODE VOLTAGES]");
-                foreach (var port in nodeNameMap.Keys.Distinct())
+                var groupPorts = group
+                .SelectMany(c => c.GetPorts())
+                .Where(p => p != null)
+                .Distinct();
+
+                var groupNodeNames = groupPorts
+                    .Where(p => nodeNameMap.ContainsKey(p))
+                    .Select(p => nodeNameMap[p])
+                    .Distinct();
+
+                Debug.Log("[SPICE NODE VOLTAGES]");
+                foreach (var node in groupNodeNames)
                 {
-                    double v = dc.GetVoltage(nodeNameMap[port]);
-                    Debug.Log($"{nodeNameMap[port]} ({port.name}): {v:F6} V");
+                    // node should exist in this circuit now
+                    double v = dc.GetVoltage(node);
+                    Debug.Log($"{node}: {v:F6} V");
                 }
 
                 // Update LEDs (if any)
@@ -256,8 +303,9 @@ public class CircuitManager : MonoBehaviour
         catch (System.Exception ex)
         {
             Debug.LogError($"[SPICE ERROR] {ex.Message}");
-            lastVoltage = 0f;
+            // Don't force lastVoltage to 0 here; printing a missing node shouldn't kill the solve.
         }
+
     }
 
 
