@@ -43,6 +43,20 @@ public class ComponentTypes
     }
 
     /// <summary>
+    /// Restores the type counters from save data. May eventually refactor so
+    /// that this can use the actual ObjectState object for better
+    /// encapsulation, but for now, retrieving the indices is done by
+    /// SaveManager
+    /// </summary>
+    public void RestoreTypeCounters(int[] maxTypeIndices)
+    {
+        for (int i = 0; i < (int)Types.TYPES_COUNT; i++)
+        {
+            typeCounters[i] = maxTypeIndices[i];
+        }
+    }
+
+    /// <summary>
     /// Exposes next available index for specified type for label suggestion.
     /// </summary>
     public int GetNextTypeIndex(Types type)
