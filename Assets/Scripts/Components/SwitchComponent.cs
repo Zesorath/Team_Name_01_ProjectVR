@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using SpiceSharp;
+using SpiceSharp.Components;
 
 public class SwitchComponent : CircuitComponentBase
 {
@@ -71,6 +73,7 @@ public class SwitchComponent : CircuitComponentBase
 
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        // intentionally empty
+        double r = IsClosed ? 1e-3 : 1e12; // closed ~ short, open ~ almost infinite
+        ckt.Add(new Resistor($"{componentId}_SW", nodeA, nodeB, r));
     }
 }
