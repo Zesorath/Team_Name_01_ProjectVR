@@ -18,7 +18,7 @@ public class ComponentID : MonoBehaviour
         if (SaveManager.Instance == null)
         { Debug.Log(StatusCode.ERROR_MISSING_SAVE_MANAGER_INSTANCE); return; }
 
-        id = Guid.NewGuid();
+        if (id == Guid.Empty) id = Guid.NewGuid();
         
         label = GenerateLabelSuggestion();
         if (label == "") 

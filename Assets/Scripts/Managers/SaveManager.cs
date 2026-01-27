@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System;
 using System.IO;
+using UnityEditor;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 public class SaveManager
@@ -11,11 +12,11 @@ public class SaveManager
     public readonly ComponentTypes types;
     SaveData saveData;
 
-    // SaveManager METHODS
+    // SaveManager methods
 
     /// <summary>
-    /// SaveManager constructor. Initializes type counters/name strings (might 
-    /// toss the names list later on) and empty saveData object.
+    /// SaveManager constructor. Initializes type counters/name strings and
+    /// empty saveData object.
     /// </summary>
     SaveManager() 
     { 
@@ -36,9 +37,7 @@ public class SaveManager
             return StatusCode.ERROR_DUPLICATE_ID;
         
         // Register the new component
-        ObjectState newObjectState = new ObjectState();
-        newObjectState.Build_ObjectState(cID);
-        saveData.objectStates.Add(cID.id, newObjectState);
+        saveData.objectStates.Add(cID.id, new ObjectState());
         Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
         return StatusCode.SUCCESS;
     }
@@ -48,24 +47,115 @@ public class SaveManager
     /// </summary>
     public void Save()
     {       
-        Debug.Log("Load() called");
-        string path = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Instance.saveData.fileName
-        );
+        Debug.Log("Save() called");
+        string path = Instance.saveData.path;
 
+        // Scan the scene for saveable objects (ComponentIDs)
+        foreach (ComponentID cID in 
+            UnityEngine.Object.FindObjectsByType<ComponentID>(
+                FindObjectsSortMode.None))
+        {
+            Instance.saveData.objectStates[cID.id].Build_ObjectState(cID);
+        }
+
+        // Serialize
         SaveData_Serialized s = new SaveData_Serialized();
-
-        StreamWriter writer = new StreamWriter(path, append: false);
-        writer.WriteLine(JsonUtility.ToJson(s, true));
-        writer.Close();
+        try
+        {
+            using (StreamWriter sw = new StreamWriter(path, append: false))
+            {
+                sw.WriteLine(JsonUtility.ToJson(s, prettyPrint: true));
+            }
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"{Instance.saveData.fileName} not created:");
+            Console.WriteLine(e.Message);
+        }
     }
 
     // TODO: Finish
     /// <summary>
     /// Loads a saved scene from a JSON file on the user's desktop.
     /// </summary>
-    public void Load() { Debug.Log("Load() called"); }
+    public void Load() {
+        Debug.Log("Load() called");
+        
+        // Scan the scene for saveable objects before loading
+        Dictionary<Guid, ComponentID> sceneCIDs = 
+            new Dictionary<Guid, ComponentID>();
+        foreach (ComponentID cID in 
+            UnityEngine.Object.FindObjectsByType<ComponentID>(
+                FindObjectsSortMode.None))
+        {
+            if (sceneCIDs.ContainsKey(cID.id))
+            {
+                Debug.Log(StatusCode.ERROR_DUPLICATE_ID);
+                Debug.Log("Load() failed");
+                return;
+            }
+            sceneCIDs.Add(cID.id, cID);
+        }
+
+        // Get the data from the save file
+        string path = Instance.saveData.path;
+        try
+        {
+            JsonUtility.FromJson<SaveData_Serialized>(File.ReadAllText(path));
+        }
+        catch (Exception e)
+        {
+            Debug.Log($"Could not open {Instance.saveData.fileName}: ");
+            Debug.Log(e.Message);
+            return;
+        }
+
+        // Scene objects will either be spawned, deleted, or updated
+        List<Guid> idsToSpawn = new List<Guid>();
+        List<Guid> idsToDelete = new List<Guid>();
+        List<Guid> idsToUpdate = new List<Guid>();
+        foreach (var kvp in sceneCIDs)
+        {
+            if (Instance.saveData.objectStates.ContainsKey(kvp.Key))
+            { idsToUpdate.Add(kvp.Key); }
+            else { idsToDelete.Add(kvp.Key); }
+        }
+        foreach (var kvp in Instance.saveData.objectStates)
+        {
+            if (!sceneCIDs.ContainsKey(kvp.Key)) { idsToSpawn.Add(kvp.Key); }
+        }
+
+        // Delete objects that exist in the current scene but not in the loaded
+        // save file
+        foreach (Guid id in idsToDelete)
+        {
+            UnityEngine.Object.Destroy(sceneCIDs[id].gameObject);
+        }
+
+        // Update objects present in current scene and loaded data
+        foreach (Guid id in idsToUpdate)
+        {
+            Instance.saveData.objectStates[id].Apply_ObjectState(sceneCIDs[id]);
+        }
+
+        // LATER: Spawn objects that exist in loaded save file but not in the
+        // current scene. Just log unfinished for now
+        int ts = idsToSpawn.Count;
+        if (ts > 0) Debug.Log(
+            $"Spawn from save not implemented yet. {ts} items not spawned");
+
+        // Get max index for each component type, then restore type counts
+        int[] maxTypeIndices = new int[(int)ComponentTypes.Types.TYPES_COUNT];
+        foreach (var kvp in Instance.saveData.objectStates)
+        {
+            int chkType = (int)kvp.Value.type;
+            if (kvp.Value.index > maxTypeIndices[chkType])
+            {
+                maxTypeIndices[chkType] = kvp.Value.index;
+            }
+        }
+        types.RestoreTypeCounters(maxTypeIndices);
+    }
 
 
     // HELPER CLASSES
@@ -77,6 +167,7 @@ public class SaveManager
     class SaveData
     {
         internal string fileName = "saveFile.json";
+        internal string path;
         internal Guid saveID;
         internal Dictionary<Guid, ObjectState> objectStates;
         
@@ -85,6 +176,10 @@ public class SaveManager
         /// </summary>
         internal SaveData()
         {
+            path = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                fileName
+            );
             saveID = Guid.NewGuid();
             objectStates = new Dictionary<Guid, ObjectState>();
         }
@@ -96,8 +191,8 @@ public class SaveManager
     [Serializable]
     class SaveData_Serialized : ISerializationCallbackReceiver
     {
-        public string saveID;
-        public List<Entry> objectStates = new List<Entry>();
+        public string saveID_serial = Instance.saveData.saveID.ToString();
+        public List<Entry> states_serial = new List<Entry>();
         
         /// <summary>
         /// ToJson() doesn't support Dictionaries, but it can handle a list of
@@ -117,35 +212,31 @@ public class SaveManager
         /// </summary>
         public void OnBeforeSerialize()
         {
-            saveID = Instance.saveData.saveID.ToString();
-
-            objectStates.Clear();
+            states_serial.Clear();
             foreach (var kvp in Instance.saveData.objectStates)
             {
-                objectStates.Add(
+                states_serial.Add(
                     new Entry { id=kvp.Key.ToString(), state=kvp.Value });
             }
-            Debug.Log($"Serialized {objectStates.Count} objects");
+            Debug.Log($"Serialized {states_serial.Count} objects");
         }
 
         // TODO: Finish
         /// <summary>
-        /// Convert saveID back to GUID and objectStates back to a dictionary
+        /// Convert saveID_serial back to GUID and states_serial back to a
+        /// dictionary
         /// </summary>
         public void OnAfterDeserialize()
         {
-            Dictionary<Guid,ObjectState> s = Instance.saveData.objectStates;
-            if (s == null) 
-            {
-                s = new Dictionary<Guid, ObjectState>();
-                Instance.saveData.objectStates = s; 
-            }
+            Debug.Log("[SaveData_Serialized] OnAfterDeserialize fired");
 
-            // Use min length just for safety. They should be the same length
-            for (int i = 0; i < objectStates.Count; i++)
+            Instance.saveData.saveID = Guid.Parse(saveID_serial);
+            Instance.saveData.objectStates.Clear();
+
+            // Re-build saveData from the file
+            foreach (var s in states_serial)
             {
-                // var val = JsonUtility.FromJson<ObjectState>(states[i]);
-                // s.Add(Guid.Parse(ids[i]), val);
+                Instance.saveData.objectStates.Add(Guid.Parse(s.id), s.state);
             }
         }
     }
@@ -164,7 +255,6 @@ public class SaveManager
         public float voltage = 0;
         public float resistance = 0;
         public float ledVoltage = 0;
-        public bool isGround = false;
 
         /// <summary>
         /// Populates ObjectState fields from a ComponentID and its GameObject's
@@ -172,7 +262,7 @@ public class SaveManager
         /// </summary>
         internal StatusCode Build_ObjectState(ComponentID cID)
         {
-            Debug.Log($"Building component {cID.id}");
+            Debug.Log($"Building state for component {cID.id}");
             
             if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
             
@@ -180,8 +270,7 @@ public class SaveManager
             type = cID.type;
             index = cID.index;
             
-            if (cID.gameObject == null)
-                return StatusCode.ERROR_MISSING_GAME_OBJECT;
+            // No null check needed, because go can't exist without cID
             GameObject go = cID.gameObject;
 
             position = go.transform.position;
@@ -196,16 +285,23 @@ public class SaveManager
             LED_Component led = go.GetComponent<LED_Component>();
             if (led != null) { ledVoltage = led.CurrentVoltage; }
 
-            if (go.GetComponent<GroundNode>() != null) { isGround = true; }
-
             return StatusCode.SUCCESS;
         }
 
-        // Will be used by load. I need to finish rewriting this
-        internal StatusCode Apply_ObjectState() { return StatusCode.SUCCESS; }
+        /// <summary>
+        /// Repopulates the GameObject's fields from an ObjectState
+        /// </summary>
+        internal StatusCode Apply_ObjectState(ComponentID cID) {
+            Debug.Log($"Applying state to component {cID.id}");
 
-        public void OLD_Apply_ObjectState(GameObject go)
-        {
+            if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
+
+            cID.label = label;
+            cID.type = type;
+            cID.index = index;
+            
+            GameObject go = cID.gameObject;
+
             go.transform.position = position;
             go.transform.rotation = rotation;
 
@@ -217,8 +313,8 @@ public class SaveManager
 
             LED_Component led = go.GetComponent<LED_Component>();
             if (led != null) { led.CurrentVoltage = ledVoltage; }
+
+            return StatusCode.SUCCESS;
         }
     }
-
-    
 }
