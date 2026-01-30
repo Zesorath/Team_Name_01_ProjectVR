@@ -23,4 +23,10 @@ public abstract class CircuitComponentBase : MonoBehaviour
 
         return new[] { portA, portB };
     }
+
+    public void Delete()
+    {
+        //do whatever needs to be done for the deletion to go smoothly here
+        Destroy(gameObject);
+    }
 }
