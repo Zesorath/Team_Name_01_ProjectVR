@@ -10,6 +10,7 @@ public class SaveManager
 {
     public static SaveManager Instance { get; } = new SaveManager();
     public readonly ComponentTypes types;
+    string saveFolderPath;
     SaveData saveData;
 
     // SaveManager methods
@@ -20,8 +21,18 @@ public class SaveManager
     /// </summary>
     SaveManager() 
     { 
+        // Initialize type counters
         types = new ComponentTypes();
-        saveData = new SaveData();
+        
+        // Generate savesFolder path string
+        saveFolderPath = Path.Combine(
+            Environment.GetFolderPath(
+                Environment.SpecialFolder.ApplicationData
+            ), "CircuitSimVR", "saves"
+        );
+        
+        // Initiallize empty SaveData registry
+        saveData = new SaveData(saveFolderPath);
     }
 
     /// <summary>
@@ -48,6 +59,19 @@ public class SaveManager
     public void Save()
     {       
         Debug.Log("Save() called");
+
+        // Create the CircuitSimVR/saves/ directory in AppData/Roaming/, if it 
+        // does not already exist.
+        if (Directory.Exists(saveFolderPath))
+        {
+            Debug.Log($"{saveFolderPath} found");
+        }
+        else
+        {
+            Debug.Log($"Save folder not found. Creating {saveFolderPath}");
+            Directory.CreateDirectory(saveFolderPath);
+        }
+
         string path = Instance.saveData.path;
 
         // Scan the scene for saveable objects (ComponentIDs)
@@ -58,7 +82,7 @@ public class SaveManager
             Instance.saveData.objectStates[cID.id].Snapshot_ObjectState(cID);
         }
 
-        // Serialize
+        // Serialize and save to file
         SaveData_Serialized s = new SaveData_Serialized();
         try
         {
@@ -66,6 +90,7 @@ public class SaveManager
             {
                 sw.WriteLine(JsonUtility.ToJson(s, prettyPrint: true));
             }
+            Debug.Log($"Saved to {path}");
         }
         catch (Exception e)
         {
@@ -173,12 +198,9 @@ public class SaveManager
         /// <summary>
         /// SaveData constructor
         /// </summary>
-        internal SaveData()
+        internal SaveData(string saveFolder)
         {
-            path = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-                fileName
-            );
+            path = Path.Combine(saveFolder, fileName);
             saveID = Guid.NewGuid();
             objectStates = new Dictionary<Guid, ObjectState>();
         }
