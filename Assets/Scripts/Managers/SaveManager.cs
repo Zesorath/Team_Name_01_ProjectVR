@@ -37,7 +37,7 @@ public class SaveManager
             return StatusCode.ERROR_DUPLICATE_ID;
         
         // Register the new component
-        saveData.objectStates.Add(cID.id, new ObjectState());
+        saveData.objectStates.Add(cID.id, new ObjectState(cID));
         Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
         return StatusCode.SUCCESS;
     }
@@ -55,7 +55,7 @@ public class SaveManager
             UnityEngine.Object.FindObjectsByType<ComponentID>(
                 FindObjectsSortMode.None))
         {
-            Instance.saveData.objectStates[cID.id].Build_ObjectState(cID);
+            Instance.saveData.objectStates[cID.id].Snapshot_ObjectState(cID);
         }
 
         // Serialize
@@ -74,7 +74,6 @@ public class SaveManager
         }
     }
 
-    // TODO: Finish
     /// <summary>
     /// Loads a saved scene from a JSON file on the user's desktop.
     /// </summary>
@@ -248,27 +247,30 @@ public class SaveManager
     class ObjectState
     {
         public ComponentTypes.Types type = ComponentTypes.Types.DEFAULT;
-        public int index = 0;
-        public string label = "NO_LABEL";
+        public int index;
+        public string label = "";
         public Vector3 position = Vector3.zero;
         public Quaternion rotation = Quaternion.identity;
-        public float voltage = 0;
-        public float resistance = 0;
-        public float ledVoltage = 0;
+        public float voltage;
+        public float resistance;
+        public float ledVoltage;
+
+        public ObjectState(ComponentID cID)
+        {
+            type = cID.type;
+            index = cID.index;
+            label = cID.label;
+        }
 
         /// <summary>
         /// Populates ObjectState fields from a ComponentID and its GameObject's
         /// relevant components.
         /// </summary>
-        internal StatusCode Build_ObjectState(ComponentID cID)
+        internal StatusCode Snapshot_ObjectState(ComponentID cID)
         {
             Debug.Log($"Building state for component {cID.id}");
             
             if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
-            
-            label = cID.label;
-            type = cID.type;
-            index = cID.index;
             
             // No null check needed, because go can't exist without cID
             GameObject go = cID.gameObject;

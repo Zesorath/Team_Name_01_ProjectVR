@@ -30,7 +30,8 @@ public class ComponentID : MonoBehaviour
 
     /// <summary>
     /// Generates a label from the component type and the next available index 
-    /// of that type. Populates index field from the type's current count.
+    /// of that type. Type is set by the component prefab. Populates index field
+    /// from the type's current count.
     /// </summary>
     public string GenerateLabelSuggestion()
     {
