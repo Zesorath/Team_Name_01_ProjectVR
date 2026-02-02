@@ -9,53 +9,50 @@ public class ComponentID : MonoBehaviour
     public ComponentTypes.Types type = ComponentTypes.Types.DEFAULT;
     public int index = -1;
 
-    /// <summary>
-    /// Runs on object spawn. Generates a unique ID and populates label field by
-    /// calling GenerateLabelSuggestion()
-    /// </summary>
+    // Runs on object spawn. Generates a unique ID if one doesn't already exist,
+    // and calls GenerateLabelSuggestion() to populate the label field
     public void Awake()
     {
-        if (SaveManager.Instance == null)
-        { Debug.Log(StatusCode.ERROR_MISSING_SAVE_MANAGER_INSTANCE); return; }
-
+        // id will already exist on load
         if (id == Guid.Empty) id = Guid.NewGuid();
         
-        label = GenerateLabelSuggestion();
-        if (label == "") 
-        { Debug.Log(StatusCode.ERROR_NO_LABEL_GENERATED); return; }
+        // Error states--abort initialization
+        string errMsg = "[ComponentID]: Initialization failure--";
+        if (SaveManager.Instance == null)
+            { Debug.Log($"{errMsg}NO SAVE MANAGER INSTANCE"); return; }
 
-        Debug.Log($"[ComponentID]: Generated ID = {id}, label = {label}");
-        Debug.Log($"Register() returned {SaveManager.Instance.Register(this)}");
+        GenerateLabelSuggestion();
+        if (label == "") { Debug.Log($"{errMsg}NO LABEL GENERATED"); return; }
+
+        // Initialization succeeded--register component
+        Debug.Log($"[ComponentID]: INITIALIZED--ID = {id}, label = {label}");
+        SaveManager.Instance.Register(this);
     }
 
-    /// <summary>
-    /// Generates a label from the component type and the next available index 
-    /// of that type. Type is set by the component prefab. Populates index field
-    /// from the type's current count.
-    /// </summary>
-    public string GenerateLabelSuggestion()
+    public void OnDestroy() { Debug.Log($"[ComponentID]: DESTROYED {id}"); }
+
+    // Generates a label from the component type and the next available index 
+    // of that type. Type is set by the component prefab. Populates index field
+    // from the type's current count.
+    public void GenerateLabelSuggestion()
     {
-        Debug.Log($"[ComponentID]: Generating label for component {id}");
+        string errMsg = "[ComponentID]: Label generation failure--";
+        
+        // Label generation failure
         if (type == ComponentTypes.Types.DEFAULT)
-            Debug.Log(StatusCode.ERROR_NO_COMPONENT_TYPE);
+            { Debug.Log($"{errMsg}COMPONENT TYPE NOT SPECIFIED"); return; }
         
         index = SaveManager.Instance.types.GetNextTypeIndex(type);
-        return $"{type}_{index}";
-    }
+        if (index == 0) { Debug.Log($"{errMsg}INDEX NOT FOUND"); return; }
 
-    /// <summary>
-    /// User can also specify their own label for a component
-    /// </summary>
-    public void ChangeLabel(string newLabel)
-    {
-        label = newLabel;
-    }
-
-    /// <summary>
-    /// Revert back to the automatically suggested label
-    /// </summary>
-    public void RevertLabel()
-    {
+        // Found both parts--generate label
         label = $"{type}_{index}";
+        Debug.Log($"[ComponentID]: GENERATED LABEL {label} for component {id}");
     }
+
+    // User can also specify their own label for a component
+    public void ChangeLabel(string newLabel) { label = newLabel; }
+
+    // Revert back to the automatically suggested label
+    public void RevertLabel() { label = $"{type}_{index}"; }
 }

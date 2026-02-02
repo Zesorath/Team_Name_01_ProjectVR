@@ -4,341 +4,161 @@ using System.Runtime.CompilerServices;
 using System;
 using System.IO;
 using UnityEditor;
+using System.Linq;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 public class SaveManager
 {
     public static SaveManager Instance { get; } = new SaveManager();
     public readonly ComponentTypes types;
-    string saveFolderPath;
+    public readonly SavePaths paths;
+    public SaveManifest man;
+
     SaveData saveData;
-
-    // SaveManager methods
-
-    /// <summary>
-    /// SaveManager constructor. Initializes type counters/name strings and
-    /// empty saveData object.
-    /// </summary>
-    SaveManager() 
-    { 
-        // Initialize type counters
+    public Dictionary<Guid, ComponentID> cIDs;
+    
+    SaveManager()
+    {
         types = new ComponentTypes();
-        
-        // Generate savesFolder path string
-        saveFolderPath = Path.Combine(
-            Environment.GetFolderPath(
-                Environment.SpecialFolder.ApplicationData
-            ), "CircuitSimVR", "saves"
-        );
-        
-        // Initiallize empty SaveData registry
-        saveData = new SaveData(saveFolderPath);
+        paths = new SavePaths();
+        man = new SaveManifest();
+
+        saveData = new SaveData();
+        cIDs = new Dictionary<Guid, ComponentID>();
     }
 
-    /// <summary>
-    /// Used by ComponentID. Each component registers itself with the save 
-    /// manager upon spawn.
-    /// </summary>
-    public StatusCode Register(ComponentID cID)
+    // Called by ComponentID to register spawned components with save manager
+    public void Register(ComponentID cID)
     {
-        Debug.Log($"[SaveManager]: Attempting to register component {cID.id}");
-        // Gatekeeping
-        if (cID.id == Guid.Empty) return StatusCode.ERROR_ID_GEN_FAILED;
-        if (saveData.objectStates.ContainsKey(cID.id))
-            return StatusCode.ERROR_DUPLICATE_ID;
+        Debug.Log($"[SaveManager]: Registering component {cID.id}");
         
-        // Register the new component
+        // Registration failure
+        string errMsg = $"[SaveManager]: FAILED TO REGISTER {cID.id}--";
+        if (cID.id == Guid.Empty)
+            { Debug.Log(errMsg + "ID generation failed"); return; }
+        if (cIDs.ContainsKey(cID.id))
+            { Debug.Log(errMsg + "Duplicate ID"); return; }
+
+        // Register component
+        cIDs.Add(cID.id, cID);
         saveData.objectStates.Add(cID.id, new ObjectState(cID));
-        Debug.Log($"[SaveManager]: Component {cID.id} successfully registered");
-        return StatusCode.SUCCESS;
+        
+        Debug.Log($"[SaveManager]: Component {cID.id} REGISTERED");
+    }
+
+    public void Unregister(ComponentID cID)
+    {
+        // ComponentID not found
+        string errMsg = $"[SaveManager]: UNREGISTER FAILED--";
+        if (cID == null) 
+            { Debug.Log($"{errMsg}NOT FOUND"); return; }
+        
+        Debug.Log($"[SaveManager]: Unregistering component {cID.id}");
+
+        // Unregister component
+        cIDs.Remove(cID.id);
+        saveData.objectStates.Remove(cID.id);
+
+        Debug.Log($"[SaveManager]: Component {cID.id} UNREGISTERED");
     }
     
-    /// <summary>
-    /// Saves the current scene to a JSON file on the user's desktop.
-    /// </summary>
+    // Saves the current scene state to file
     public void Save()
     {       
-        Debug.Log("Save() called");
-
-        // Create the CircuitSimVR/saves/ directory in AppData/Roaming/, if it 
-        // does not already exist.
-        if (Directory.Exists(saveFolderPath))
-        {
-            Debug.Log($"{saveFolderPath} found");
-        }
+        Debug.Log("[SaveManager]: Save() CALLED");
+        
+        // Capture current state of all registered scene objects
+        foreach (ComponentID cID in cIDs.Values)
+            { saveData.objectStates[cID.id].Capture_ObjectState(cID); }
+        
+        // Create the saveFiles folder, if it does not exist
+        string sfp = paths.saveFilesPath;
+        Debug.Log($"[SaveManager]: Searching for save directory {sfp}");
+        if (Directory.Exists(sfp)) 
+            { Debug.Log($"[SaveManager]: {sfp} FOUND. Saving"); }
         else
         {
-            Debug.Log($"Save folder not found. Creating {saveFolderPath}");
-            Directory.CreateDirectory(saveFolderPath);
+            Directory.CreateDirectory(sfp);
+            Debug.Log($"[SaveManager]: CREATED {sfp}");
         }
 
-        string path = Instance.saveData.path;
-
-        // Scan the scene for saveable objects (ComponentIDs)
-        foreach (ComponentID cID in 
-            UnityEngine.Object.FindObjectsByType<ComponentID>(
-                FindObjectsSortMode.None))
-        {
-            Instance.saveData.objectStates[cID.id].Snapshot_ObjectState(cID);
-        }
-
-        // Serialize and save to file
-        SaveData_Serialized s = new SaveData_Serialized();
+        // Serialize and write to file
+        man.lastSave = $"{saveData.saveID}.json";
+        string sfPath = Path.Combine(sfp, man.lastSave);
         try
         {
-            using (StreamWriter sw = new StreamWriter(path, append: false))
+            using (StreamWriter sw = new StreamWriter(sfPath, append: false))
             {
-                sw.WriteLine(JsonUtility.ToJson(s, prettyPrint: true));
+                sw.WriteLine(JsonUtility.ToJson(saveData, prettyPrint: true));
             }
-            Debug.Log($"Saved to {path}");
+            Debug.Log($"[SaveManager]: SAVED to {sfPath}");
         }
         catch (Exception e)
-        {
-            Console.WriteLine($"{Instance.saveData.fileName} not created:");
-            Console.WriteLine(e.Message);
-        }
+            { Debug.Log($"[SaveManager]: SAVE FAILED--{e.Message}"); }
     }
 
-    /// <summary>
-    /// Loads a saved scene from a JSON file on the user's desktop.
-    /// </summary>
-    public void Load() {
-        Debug.Log("Load() called");
-        
-        // Scan the scene for saveable objects before loading
-        Dictionary<Guid, ComponentID> sceneCIDs = 
-            new Dictionary<Guid, ComponentID>();
-        foreach (ComponentID cID in 
-            UnityEngine.Object.FindObjectsByType<ComponentID>(
-                FindObjectsSortMode.None))
-        {
-            if (sceneCIDs.ContainsKey(cID.id))
-            {
-                Debug.Log(StatusCode.ERROR_DUPLICATE_ID);
-                Debug.Log("Load() failed");
-                return;
-            }
-            sceneCIDs.Add(cID.id, cID);
-        }
+    // Load a saved scene from the save file. Compares current registered
+    // ComponentIDs in cIDs with the de-serialized saveData to determine which
+    // objects to update, delete, or spawn.
+    public void Load(string saveFileName) 
+    {
+        Debug.Log("[SaveManager]: Load() CALLED");
 
-        // Get the data from the save file
-        string path = Instance.saveData.path;
+        // Deserialize saveData from the file
+        string sfPath = Path.Combine(paths.saveFilesPath, saveFileName);
         try
         {
-            JsonUtility.FromJson<SaveData_Serialized>(File.ReadAllText(path));
+            JsonUtility.FromJsonOverwrite(File.ReadAllText(sfPath), saveData);
+            Debug.Log($"[SaveManager]: LOADED from {sfPath}");
         }
         catch (Exception e)
+            { Debug.Log($"[SaveManager]: LOAD FAILED--{e.Message}"); return; }
+        
+        // PRUNE: Delete objects in the current scene but not in the save file
+        int expectDelCt = cIDs.Count - saveData.objectStates.Count;
+        if (expectDelCt < 0) expectDelCt = 0;
+        Debug.Log($"[SaveManager]: PRUNE expected to delete {expectDelCt}");
+        
+        int dCt = 0;
+        Guid[] liveIDs = cIDs.Keys.ToArray();
+        foreach (Guid id in liveIDs)
         {
-            Debug.Log($"Could not open {Instance.saveData.fileName}: ");
-            Debug.Log(e.Message);
-            return;
-        }
-
-        // Scene objects will either be spawned, deleted, or updated
-        List<Guid> idsToSpawn = new List<Guid>();
-        List<Guid> idsToDelete = new List<Guid>();
-        List<Guid> idsToUpdate = new List<Guid>();
-        foreach (var kvp in sceneCIDs)
-        {
-            if (Instance.saveData.objectStates.ContainsKey(kvp.Key))
-            { idsToUpdate.Add(kvp.Key); }
-            else { idsToDelete.Add(kvp.Key); }
-        }
-        foreach (var kvp in Instance.saveData.objectStates)
-        {
-            if (!sceneCIDs.ContainsKey(kvp.Key)) { idsToSpawn.Add(kvp.Key); }
-        }
-
-        // Delete objects that exist in the current scene but not in the loaded
-        // save file
-        foreach (Guid id in idsToDelete)
-        {
-            UnityEngine.Object.Destroy(sceneCIDs[id].gameObject);
-        }
-
-        // Update objects present in current scene and loaded data
-        foreach (Guid id in idsToUpdate)
-        {
-            Instance.saveData.objectStates[id].Apply_ObjectState(sceneCIDs[id]);
-        }
-
-        // LATER: Spawn objects that exist in loaded save file but not in the
-        // current scene. Just log unfinished for now
-        int ts = idsToSpawn.Count;
-        if (ts > 0) Debug.Log(
-            $"Spawn from save not implemented yet. {ts} items not spawned");
-
-        // Get max index for each component type, then restore type counts
-        int[] maxTypeIndices = new int[(int)ComponentTypes.Types.TYPES_COUNT];
-        foreach (var kvp in Instance.saveData.objectStates)
-        {
-            int chkType = (int)kvp.Value.type;
-            if (kvp.Value.index > maxTypeIndices[chkType])
+            // Delete() is in CircuitComponentBase class
+            GameObject go = cIDs[id].gameObject;
+            CircuitComponentBase ccb = go.GetComponent<CircuitComponentBase>();
+            
+            if (!saveData.objectStates.ContainsKey(id))
             {
-                maxTypeIndices[chkType] = kvp.Value.index;
+                Debug.Log($"[SaveManager]: PRUNE deleting {id}");
+                ccb.Delete();
+                dCt++;
             }
         }
-        types.RestoreTypeCounters(maxTypeIndices);
-    }
 
-
-    // HELPER CLASSES
-
-    /// <summary>
-    /// Contains the name and unique ID of the save file, and a dictionary of
-    /// ObjectStates indexed by ComponentID.id (a GUID).
-    /// </summary>
-    class SaveData
-    {
-        internal string fileName = "saveFile.json";
-        internal string path;
-        internal Guid saveID;
-        internal Dictionary<Guid, ObjectState> objectStates;
-        
-        /// <summary>
-        /// SaveData constructor
-        /// </summary>
-        internal SaveData(string saveFolder)
-        {
-            path = Path.Combine(saveFolder, fileName);
-            saveID = Guid.NewGuid();
-            objectStates = new Dictionary<Guid, ObjectState>();
-        }
-    }
-
-    /// <summary>
-    /// saveData formatted for automatic JSON serialization
-    /// </summary>
-    [Serializable]
-    class SaveData_Serialized : ISerializationCallbackReceiver
-    {
-        public string saveID_serial = Instance.saveData.saveID.ToString();
-        public List<Entry> states_serial = new List<Entry>();
-        
-        /// <summary>
-        /// ToJson() doesn't support Dictionaries, but it can handle a list of
-        /// instances of a custom class with all serializable fields. Entry acts
-        /// as a key, value pair for serialization.
-        /// </summary>
-        [Serializable]
-        public class Entry
-        {
-            public string id = "";
-            public ObjectState state;
-        }
-
-        /// <summary>
-        /// Convert saveID from GUID to string and saveData.objectStates from 
-        /// Dictionary<Guid, ObjectState> to List<Entry>
-        /// </summary>
-        public void OnBeforeSerialize()
-        {
-            states_serial.Clear();
-            foreach (var kvp in Instance.saveData.objectStates)
-            {
-                states_serial.Add(
-                    new Entry { id=kvp.Key.ToString(), state=kvp.Value });
-            }
-            Debug.Log($"Serialized {states_serial.Count} objects");
-        }
+        // UPDATE objects that are in both current scene and save file
+        int uCt = 0;
+        foreach (Guid id in cIDs.Keys)
+            { saveData.objectStates[id].Apply_ObjectState(cIDs[id]); uCt++; }
 
         // TODO: Finish
-        /// <summary>
-        /// Convert saveID_serial back to GUID and states_serial back to a
-        /// dictionary
-        /// </summary>
-        public void OnAfterDeserialize()
+        // SPAWN objects in the save file but not the current scene
+        int expectSpnCt = saveData.objectStates.Count - cIDs.Count;
+        if (expectSpnCt < 0) expectSpnCt = 0;
+        Debug.Log($"[SaveManager]: SPAWN expected to spawn {expectSpnCt}");
+
+        int sCt = 0;
+        foreach (Guid id in saveData.objectStates.Keys)
         {
-            Debug.Log("[SaveData_Serialized] OnAfterDeserialize fired");
-
-            Instance.saveData.saveID = Guid.Parse(saveID_serial);
-            Instance.saveData.objectStates.Clear();
-
-            // Re-build saveData from the file
-            foreach (var s in states_serial)
-            {
-                Instance.saveData.objectStates.Add(Guid.Parse(s.id), s.state);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Stores the state of a single component for saving/loading
-    /// </summary>
-    [Serializable]
-    class ObjectState
-    {
-        public ComponentTypes.Types type = ComponentTypes.Types.DEFAULT;
-        public int index;
-        public string label = "";
-        public Vector3 position = Vector3.zero;
-        public Quaternion rotation = Quaternion.identity;
-        public float voltage;
-        public float resistance;
-        public float ledVoltage;
-
-        public ObjectState(ComponentID cID)
-        {
-            type = cID.type;
-            index = cID.index;
-            label = cID.label;
+            if (!cIDs.ContainsKey(id)) sCt++;
         }
 
-        /// <summary>
-        /// Populates ObjectState fields from a ComponentID and its GameObject's
-        /// relevant components.
-        /// </summary>
-        internal StatusCode Snapshot_ObjectState(ComponentID cID)
-        {
-            Debug.Log($"Building state for component {cID.id}");
-            
-            if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
-            
-            // No null check needed, because go can't exist without cID
-            GameObject go = cID.gameObject;
-
-            position = go.transform.position;
-            rotation = go.transform.rotation;
-
-            DCSource dc = go.GetComponent<DCSource>();
-            if (dc != null) { voltage = dc.voltage; }
-
-            Ohms res = go.GetComponent<Ohms>();
-            if (res != null) { resistance = res.resistance; }
-
-            LED_Component led = go.GetComponent<LED_Component>();
-            if (led != null) { ledVoltage = led.CurrentVoltage; }
-
-            return StatusCode.SUCCESS;
-        }
-
-        /// <summary>
-        /// Repopulates the GameObject's fields from an ObjectState
-        /// </summary>
-        internal StatusCode Apply_ObjectState(ComponentID cID) {
-            Debug.Log($"Applying state to component {cID.id}");
-
-            if (cID == null) return StatusCode.ERROR_MISSING_COMPONENT;
-
-            cID.label = label;
-            cID.type = type;
-            cID.index = index;
-            
-            GameObject go = cID.gameObject;
-
-            go.transform.position = position;
-            go.transform.rotation = rotation;
-
-            DCSource dc = go.GetComponent<DCSource>();
-            if (dc != null) { dc.voltage = voltage; }
-
-            Ohms res = go.GetComponent<Ohms>();
-            if (res != null) { res.resistance = resistance; }
-
-            LED_Component led = go.GetComponent<LED_Component>();
-            if (led != null) { led.CurrentVoltage = ledVoltage; }
-
-            return StatusCode.SUCCESS;
-        }
+        // Restore type counts from loaded objects
+        types.RestoreTypeCounters(saveData);
+        
+        // Display successful load stats
+        string loadStats = $"Objects UPDATED: {uCt} ; ";
+        loadStats += $"Objects DELETED: {dCt} ; ";
+        loadStats += $"Objects TO SPAWN: {sCt}";
+        Debug.Log($"[SaveManager]: {loadStats}");
     }
 }

@@ -10,6 +10,8 @@ public class InputManager : MonoBehaviour
     /// </summary>
     void Update()
     {
+        SaveManager sm = SaveManager.Instance;
+        
         // Save current scene to file
         if (Input.GetKeyDown(KeyCode.F5)) 
         {
@@ -21,7 +23,7 @@ public class InputManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F9))
         {
             Debug.Log("F9 pressed. Calling Load()");
-            SaveManager.Instance.Load();
+            SaveManager.Instance.Load(sm.man.lastSave);
         }
     }
 }
