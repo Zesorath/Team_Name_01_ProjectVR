@@ -11,19 +11,20 @@ public class InputManager : MonoBehaviour
     void Update()
     {
         SaveManager sm = SaveManager.Instance;
+        string splash = "[InputManager]: ";
         
         // Save current scene to file
         if (Input.GetKeyDown(KeyCode.F5)) 
         {
-            Debug.Log($"F5 pressed. Calling Save()");
-            SaveManager.Instance.Save();
+            Debug.Log($"{splash}F5 pressed. Calling QuickSave()");
+            sm.QuickSave();
         }
 
-        // Will load from the save file
+        // Load from the most recent save file
         if (Input.GetKeyDown(KeyCode.F9))
         {
-            Debug.Log("F9 pressed. Calling Load()");
-            SaveManager.Instance.Load(sm.man.lastSave);
+            Debug.Log($"{splash}F9 pressed. Calling QuickLoad()");
+            sm.QuickLoad();
         }
     }
 }

@@ -62,6 +62,7 @@ public class SaveManager
         Debug.Log($"[SaveManager]: Component {cID.id} UNREGISTERED");
     }
     
+    public void QuickSave() { Save(); }
     // Saves the current scene state to file
     public void Save()
     {       
@@ -96,6 +97,8 @@ public class SaveManager
         catch (Exception e)
             { Debug.Log($"[SaveManager]: SAVE FAILED--{e.Message}"); }
     }
+
+    public void QuickLoad() { Load(man.lastSave); }
 
     // Load a saved scene from the save file. Compares current registered
     // ComponentIDs in cIDs with the de-serialized saveData to determine which
