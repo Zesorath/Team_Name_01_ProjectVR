@@ -1,10 +1,19 @@
 using UnityEngine;
 using SpiceSharp;
 using System.Collections.Generic;
+using System.Linq;
 
 public abstract class CircuitComponentBase : MonoBehaviour
 {
     public string componentId;
+
+    [Header("NEW: Terminal Clusters (supports parallel)")]
+    public PortCluster terminalA;
+    public PortCluster terminalB;
+
+    [Header("OLD (optional): single-socket ports (legacy)")]
+    public PortSocketBinder portA;
+    public PortSocketBinder portB;
 
     protected virtual void Awake()
     {
@@ -14,26 +23,43 @@ public abstract class CircuitComponentBase : MonoBehaviour
 
     public abstract void AddToSpice(Circuit ckt, string nodeA, string nodeB);
 
-    // Auto-discover ports from children instead of manually assigning portA/portB
-    public virtual IEnumerable<PortSocketBinder> GetPorts()
+   
+    public virtual IEnumerable<PortCluster> GetTerminals()
     {
-        var ports = GetComponentsInChildren<PortSocketBinder>(true);
+        // Preferred: clusters
+        if (terminalA != null && terminalB != null)
+            return new[] { terminalA, terminalB };
 
-        if (ports == null || ports.Length == 0)
-            Debug.LogError($"{componentId}: No PortSocketBinder found under this component. Check prefab hierarchy.");
-
-        return ports;
+        
+        return new PortCluster[] { null, null };
     }
 
-    // Do whatever needs to be done for the deletion to go smoothly here
-    public void Delete()
+  
+    public virtual IEnumerable<PortSocketBinder> GetPorts()
+    {
+        // If clusters exist, return one socket from each cluster
+        if (terminalA != null && terminalB != null)
+        {
+            var a = terminalA.AnySocket();
+            var b = terminalB.AnySocket();
+            if (a == null || b == null)
+                Debug.LogError($"{componentId}: terminalA/terminalB missing sockets.");
+            return new[] { a, b };
+        }
+
+        // Otherwise use legacy ports
+        if (portA == null || portB == null)
+            Debug.LogError($"{componentId}: portA or portB is not assigned!");
+
+        return new[] { portA, portB };
+    }
+
+
+public void Delete()
     {
         SaveManager sm = SaveManager.Instance;
         ComponentID cID = gameObject.GetComponent<ComponentID>();
-
-        // Unregister object from save manager
         sm.Unregister(cID);
-
         Destroy(gameObject);
     }
 }
