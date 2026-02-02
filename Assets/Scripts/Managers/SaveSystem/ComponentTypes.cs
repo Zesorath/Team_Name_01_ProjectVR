@@ -18,7 +18,7 @@ public class ComponentTypes
         LED,      
         GROUND,    
         OTHER,
-        TYPES_COUNT
+        TYPES_COUNT // This one must always be last
     }
 
     /// <summary>
@@ -48,22 +48,15 @@ public class ComponentTypes
     /// encapsulation, but for now, retrieving the indices is done by
     /// SaveManager
     /// </summary>
-    public void RestoreTypeCounters(int[] maxTypeIndices)
+    public void RestoreTypeCounters(SaveData sd)
     {
-        for (int i = 0; i < (int)Types.TYPES_COUNT; i++)
-        {
-            typeCounters[i] = maxTypeIndices[i];
-        }
+        
     }
 
     /// <summary>
     /// Exposes next available index for specified type for label suggestion.
     /// </summary>
-    public int GetNextTypeIndex(Types type)
-    {
-        typeCounters[(int)type]++;
-        return typeCounters[(int)type];
-    }
+    public int GetNextTypeIndex(Types type) {return ++typeCounters[(int)type];}
 
     /// <summary>
     /// Exposes specified type name
