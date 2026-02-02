@@ -36,7 +36,6 @@ public class SaveData : ISerializationCallbackReceiver
         Debug.Log($"[SaveData]: Serialized {states_serial.Count} objects");
     }
 
-    // TODO: Handle cIDs dictionary
     // Serializable -> SaveData
     public void OnAfterDeserialize()
     {

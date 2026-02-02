@@ -115,9 +115,6 @@ public class ComponentID : MonoBehaviour
         if (grab != null) grab.selectExited.RemoveListener(OnReleased);
     }
 
-    // Move id/label generation and registration (basically everything in old Awake()) to OnRelease()
-
-
     // Just announce when the ComponentID object is destroyed
     public void OnDestroy() { Debug.Log($"[ComponentID]: DESTROYED {id}"); }
 }
