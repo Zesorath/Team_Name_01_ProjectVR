@@ -23,15 +23,18 @@ public class CircuitManager : MonoBehaviour
 
     private bool _isRebuilding = false;
     private Coroutine _transientRoutine;
+    private Transient _activeTran = null;
 
+    // Must use the same node mapping used for the netlist
+    private Dictionary<CircuitComponentBase, (string nodeA, string nodeB)> _activeNodesByComp
+        = new Dictionary<CircuitComponentBase, (string nodeA, string nodeB)>();
     [Header("Cap Debug")]
     public bool debugCapacitor = true;
     public float capDebugPrintEverySeconds = 0.10f;
     private double _nextCapPrintTime = 0.0;
 
     // Persist capacitor voltage across rebuilds (by componentId)
-    private readonly Dictionary<string, double> _capVoltageById = new Dictionary<string, double>();
-
+    private readonly Dictionary<string, double> _capVoltageById = new();
     private void Awake()
     {
         Instance = this;
@@ -175,8 +178,8 @@ public class CircuitManager : MonoBehaviour
             }
 
             // (5) Find connected groups
-            TurnAllLedsOff();
-            lastVoltage = 0f;
+         
+            
 
             var visited = new HashSet<CircuitComponentBase>();
             var groups = new List<List<CircuitComponentBase>>();
@@ -244,6 +247,9 @@ public class CircuitManager : MonoBehaviour
 
                 if (runTransient)
                 {
+                    // IMPORTANT: carry the capacitor’s last voltage into the new run
+                    SeedCapInitialVoltages(bestGroup);
+
                     var ckt = BuildSpiceCircuitForGroup(bestGroup, spiceComponents);
                     if (ckt != null)
                     {
@@ -259,6 +265,8 @@ public class CircuitManager : MonoBehaviour
             else
             {
                 Debug.Log("[CircuitManager] No valid groups to simulate.");
+                lastVoltage = 0f;
+                TurnAllLedsOff();
             }
 
         }
@@ -385,23 +393,62 @@ public class CircuitManager : MonoBehaviour
         lastVoltage = (float)highestVSeen;
         Debug.Log($"[CircuitManager] Transient done — lastVoltage={lastVoltage:F3}V");
     }
-
-    private void SaveCapStates(
-        Transient tran,
-        List<CircuitComponentBase> group,
-        Dictionary<CircuitComponentBase, (string nodeA, string nodeB)> nodesByComp)
+    private void SeedCapInitialVoltages(List<CircuitComponentBase> group)
     {
-        foreach (var cap in group.Where(x => x != null && x.GetType().Name == "CapacitorComponent"))
+        foreach (var cap in group.Where(c => c != null && c.GetType().Name == "CapacitorComponent"))
         {
-            if (!nodesByComp.TryGetValue(cap, out var nn)) continue;
+            if (_capVoltageById.TryGetValue(cap.componentId, out var v0))
+            {
+                // set capacitor.initialVoltage via reflection (matches your CapacitorComponent.cs field name)
+                var field = cap.GetType().GetField("initialVoltage");
+                if (field != null && field.FieldType == typeof(double))
+                    field.SetValue(cap, v0);
+            }
+        }
+    }
+
+    private void SnapshotCapStatesFromActiveTransient(List<CircuitComponentBase> group)
+    {
+        if (_activeTran == null) return;
+        if (_activeNodesByComp == null || _activeNodesByComp.Count == 0) return;
+
+        foreach (var cap in group.OfType<CapacitorComponent>())
+        {
+            if (cap == null) continue;
+            if (!_activeNodesByComp.TryGetValue(cap, out var nn)) continue;
+
+            double vA, vB;
+            try { vA = _activeTran.GetVoltage(nn.nodeA); }
+            catch { continue; }
+            try { vB = _activeTran.GetVoltage(nn.nodeB); }
+            catch { continue; }
+
+            // Keep same sign convention you already use elsewhere
+            _capVoltageById[cap.componentId] = vA - vB;
+        }
+    }
+    void SaveCapStates(
+      Transient tran,
+      List<CircuitComponentBase> group,
+      Dictionary<CircuitComponentBase, (string nodeA, string nodeB)> nodes)
+    {
+        foreach (var cap in group.OfType<CapacitorComponent>())
+        {
+            if (!nodes.TryGetValue(cap, out var nn))
+                continue;
+
+            double vcap;
 
             try
             {
-                double vA = tran.GetVoltage(nn.nodeA);
-                double vB = tran.GetVoltage(nn.nodeB);
-                _capVoltageById[cap.componentId] = vA - vB;
+                vcap = tran.GetVoltage(nn.nodeA) - tran.GetVoltage(nn.nodeB);
             }
-            catch { }
+            catch
+            {
+                continue;
+            }
+
+            _capVoltageById[cap.componentId] = (float)vcap;
         }
     }
 
@@ -409,6 +456,14 @@ public class CircuitManager : MonoBehaviour
     {
         foreach (var l in UnityEngine.Object.FindObjectsByType<LED_Component>(FindObjectsSortMode.None))
             l.UpdateLEDState(0f);
+    }
+    public float GetCachedCapVoltage(string capId)
+    {
+        return _capVoltageById.TryGetValue(capId, out var v) ? (float)v : 0f;
+    }
+    public void SetCachedCapVoltage(string capId, float v)
+    {
+        _capVoltageById[capId] = v;
     }
 
     private double GetCapacitanceFarads(CircuitComponentBase cap)
@@ -468,7 +523,7 @@ public class CircuitManager : MonoBehaviour
             double cF = GetCapacitanceFarads(cap);
             double qC = cF * vcap;
             double eJ = 0.5 * cF * vcap * vcap;
-
+            CircuitManager.Instance.SetCachedCapVoltage(cap.componentId, (float)vcap);
             Debug.Log($"[CAP] t={tran.Time:F3}s  {cap.componentId}  Vcap={vcap:F4}V  C={cF:E3}F  Q={qC:E3}C  E={eJ:E3}J  ({nn.nodeA}-{nn.nodeB})");
         }
     }
