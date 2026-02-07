@@ -1,7 +1,7 @@
 using UnityEngine;
 using SpiceSharp;
 using System.Collections.Generic;
-using System.Linq;
+
 public abstract class CircuitComponentBase : MonoBehaviour
 {
     public string componentId;
@@ -13,15 +13,16 @@ public abstract class CircuitComponentBase : MonoBehaviour
     }
 
     public abstract void AddToSpice(Circuit ckt, string nodeA, string nodeB);
-    public PortSocketBinder portA;
-    public PortSocketBinder portB;
 
+    // Auto-discover ports from children instead of manually assigning portA/portB
     public virtual IEnumerable<PortSocketBinder> GetPorts()
     {
-        if (portA == null || portB == null)
-            Debug.LogError($"{componentId}: portA or portB is not assigned!");
+        var ports = GetComponentsInChildren<PortSocketBinder>(true);
 
-        return new[] { portA, portB };
+        if (ports == null || ports.Length == 0)
+            Debug.LogError($"{componentId}: No PortSocketBinder found under this component. Check prefab hierarchy.");
+
+        return ports;
     }
 
     // Do whatever needs to be done for the deletion to go smoothly here
@@ -32,7 +33,7 @@ public abstract class CircuitComponentBase : MonoBehaviour
 
         // Unregister object from save manager
         sm.Unregister(cID);
-        
+
         Destroy(gameObject);
     }
 }

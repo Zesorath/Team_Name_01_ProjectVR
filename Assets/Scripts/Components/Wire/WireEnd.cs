@@ -63,12 +63,12 @@ public class WireEnd : MonoBehaviour
         switch (currentMoveMode)
         {
             case MoveMode.ParentWire:
-                Debug.Log($"{name} moving parent wire");
+                
                 parentWire.transform.position = grabTarget.position;
                 parentWire.transform.rotation = grabTarget.rotation;
                 break;
             case MoveMode.FreeEnd:
-                Debug.Log($"{name} moving free end");
+                
                 transform.position = grabTarget.position;
                 transform.rotation = grabTarget.rotation;
                 break;

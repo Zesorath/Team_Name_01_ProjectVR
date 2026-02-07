@@ -34,7 +34,13 @@ public class ItemSpawner : MonoBehaviour
 
     void Spawn()
     {
-        GameObject inst = Instantiate(Item_To_Spawn, this.transform);
+        // Spawn unparented
+        GameObject inst = Instantiate(Item_To_Spawn, transform.position, transform.rotation);
+
+        // Keep the SAME apparent world size it had when it was parented under this spawner
+        inst.transform.localScale = Vector3.Scale(Item_To_Spawn.transform.localScale, transform.lossyScale);
+
         LastItem = inst;
     }
+
 }

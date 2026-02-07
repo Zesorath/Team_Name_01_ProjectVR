@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using SpiceSharp;
+using SpiceSharp.Components;
 
 public class SwitchComponent : CircuitComponentBase
 {
@@ -9,33 +11,50 @@ public class SwitchComponent : CircuitComponentBase
     public bool IsClosed => isClosed;
 
     [Header("Handle Interactable (top cylinder)")]
-    [SerializeField] private UnityEngine.XR.Interaction.Toolkit.Interactables.XRBaseInteractable handleInteractable;
+    [SerializeField] private XRBaseInteractable handleInteractable;
 
     protected override void Awake()
     {
         base.Awake();
 
+        // Auto-find if not assigned (important for spawned prefabs)
         if (!handleInteractable)
-            Debug.LogError($"[SWITCH] {componentId}: handleInteractable is not assigned!");
-        else
-            Debug.Log($"[SWITCH][Awake] {componentId}: handleInteractable={handleInteractable.name}");
+        {
+            // Prefer an XRSimpleInteractable (your handle)
+            handleInteractable = GetComponentInChildren<XRSimpleInteractable>(true);
+
+            // Fallback: any interactable in children
+            if (!handleInteractable)
+                handleInteractable = GetComponentInChildren<XRBaseInteractable>(true);
+            var grab = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
+            var handleCol = handleInteractable.GetComponent<Collider>();
+
+            if (grab && handleCol)
+            {
+                // Ensure grab interactable does NOT use the handle collider
+                grab.colliders.Remove(handleCol);
+                Debug.Log($"[SWITCH] Removed handle collider from grab colliders: {handleCol.name}");
+            }
+        }
+
+        Debug.Log($"[SWITCH][Awake] {componentId} handleInteractable={(handleInteractable ? handleInteractable.name : "NULL")}");
     }
 
     private void OnEnable()
     {
-        if (handleInteractable == null) return;
+        if (!handleInteractable)
+        {
+            Debug.LogError($"[SWITCH] {componentId}: handleInteractable is not assigned!");
+            return;
+        }
 
-       // handleInteractable.hoverEntered.AddListener(OnHoverEntered);
         handleInteractable.selectEntered.AddListener(OnSelectEntered);
     }
 
-
     private void OnDisable()
     {
-        if (handleInteractable == null) return;
-
-      //  handleInteractable.hoverEntered.RemoveListener(OnHoverEntered);
-        handleInteractable.selectEntered.RemoveListener(OnSelectEntered);
+        if (handleInteractable != null)
+            handleInteractable.selectEntered.RemoveListener(OnSelectEntered);
     }
 
     private void OnSelectEntered(SelectEnterEventArgs args)
@@ -44,27 +63,17 @@ public class SwitchComponent : CircuitComponentBase
         Toggle();
     }
 
-    
-
-    private void OnActivated(ActivateEventArgs args)
-    {
-        Debug.Log($"[SWITCH][ACTIVATE] {componentId} handle activated by {args.interactorObject?.transform.name}");
-        Toggle(); // <-- now exists
-    }
-
     private void Toggle()
     {
         bool old = isClosed;
         isClosed = !isClosed;
-
         Debug.Log($"[SWITCH][TOGGLE] {componentId}: {old} -> {isClosed}");
-
         CircuitManager.Instance?.NotifyConnectionChanged();
     }
 
-    // Connectivity handled in CircuitManager via unions/skips
-    public override void AddToSpice(Circuit ckt, string nodeA, string nodeB)
+    public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        // intentionally empty
+        double r = IsClosed ? 1e-3 : 1e12; // closed ~ short, open ~ almost infinite
+        ckt.Add(new Resistor($"{componentId}_SW", nodeA, nodeB, r));
     }
 }
