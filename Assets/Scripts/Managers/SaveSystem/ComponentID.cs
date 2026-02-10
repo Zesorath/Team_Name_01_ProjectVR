@@ -52,6 +52,9 @@ public class ComponentID : MonoBehaviour
         Debug.Log($"[ComponentID]: GENERATED LABEL {label} for component {id}");
     }
 
+    // Used to flip registered bool for Register() when spawning from save file
+    public void MarkRegistered() { registered = true; }
+
     // User can also specify their own label for a component
     public void ChangeLabel(string newLabel) { label = newLabel; }
 
@@ -81,10 +84,21 @@ public class ComponentID : MonoBehaviour
             return;
         }
 
-        // There will be no ItemSpawner if the object is spawned from save file,
+        // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
         os = GetComponentInParent<ItemSpawner>();
-        if (os == null) { Init(); return; }
+        if (os == null)
+        {            
+            // Set id/label/index and Register() will happen manually on Load()
+            // NOTE: This might change later on
+            SaveManager sm = SaveManager.Instance;
+            if (sm != null && sm.isLoadingOrSaving) return;
+            
+            // The other option is that the components already exist in the
+            // scene as part of the level
+            Init(); 
+            return;
+        }
 
         // Otherwise, cache origin spawner's position, rotation, and size
         osTransform = os.transform;

@@ -1,8 +1,6 @@
 using System;
 using UnityEngine;
 
-// CONSIDER: This might want to be a ISerializationCallbackReceiver
-
 [Serializable]
 public class ObjectState
 {

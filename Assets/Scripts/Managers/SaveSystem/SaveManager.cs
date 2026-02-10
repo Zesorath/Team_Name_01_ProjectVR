@@ -13,6 +13,7 @@ public class SaveManager
     public readonly ComponentTypes types;
     public readonly SavePaths paths;
     public SaveManifest man;
+    public bool isLoadingOrSaving = false;
 
     SaveData saveData;
     public Dictionary<Guid, ComponentID> cIDs;
@@ -41,7 +42,8 @@ public class SaveManager
 
         // Register component
         cIDs.Add(cID.id, cID);
-        saveData.objectStates.Add(cID.id, new ObjectState(cID));
+        if (!saveData.objectStates.ContainsKey(cID.id))
+            saveData.objectStates.Add(cID.id, new ObjectState(cID));
         
         Debug.Log($"[SaveManager]: Component {cID.id} REGISTERED");
     }
@@ -63,10 +65,15 @@ public class SaveManager
     }
     
     public void QuickSave() { Save(); }
+
     // Saves the current scene state to file
     public void Save()
     {       
         Debug.Log("[SaveManager]: Save() CALLED");
+
+        // TODO: FINISH
+        // Disable interactions while actively saving/loading (currently stub)
+        isLoadingOrSaving = true;
         
         // Capture current state of all registered scene objects
         foreach (ComponentID cID in cIDs.Values)
@@ -96,6 +103,10 @@ public class SaveManager
         }
         catch (Exception e)
             { Debug.Log($"[SaveManager]: SAVE FAILED--{e.Message}"); }
+        
+        // TODO: FINISH
+        // Re-enable interactions
+        isLoadingOrSaving = false;
     }
 
     public void QuickLoad() { Load(man.lastSave); }
@@ -107,6 +118,10 @@ public class SaveManager
     {
         Debug.Log("[SaveManager]: Load() CALLED");
 
+        // TODO: FINISH
+        // Disable interactions while actively saving/loading (currently stub)
+        isLoadingOrSaving = true;
+
         // Deserialize saveData from the file
         string sfPath = Path.Combine(paths.saveFilesPath, saveFileName);
         try
@@ -117,7 +132,7 @@ public class SaveManager
         catch (Exception e)
             { Debug.Log($"[SaveManager]: LOAD FAILED--{e.Message}"); return; }
         
-        // PRUNE: Delete objects in the current scene but not in the save file
+        // PRUNE: Delete objects in the current scene and not in the save file
         int expectDelCt = cIDs.Count - saveData.objectStates.Count;
         if (expectDelCt < 0) expectDelCt = 0;
         Debug.Log($"[SaveManager]: PRUNE expected to delete {expectDelCt}");
@@ -126,7 +141,8 @@ public class SaveManager
         Guid[] liveIDs = cIDs.Keys.ToArray();
         foreach (Guid id in liveIDs)
         {
-            // Delete() is in CircuitComponentBase class
+            // Delete() is in CircuitComponentBase class. It unregisters and
+            // everything
             GameObject go = cIDs[id].gameObject;
             CircuitComponentBase ccb = go.GetComponent<CircuitComponentBase>();
             
@@ -152,7 +168,38 @@ public class SaveManager
         int sCt = 0;
         foreach (Guid id in saveData.objectStates.Keys)
         {
-            if (!cIDs.ContainsKey(id)) sCt++;
+            
+            if (cIDs.ContainsKey(id)) { continue; }
+
+            Debug.Log($"[SaveManager]: SPAWN creating {id}");
+
+            ObjectState state = saveData.objectStates[id];
+            GameObject prefab = ResolvePrefab(state.type);
+            if (prefab == null) continue;
+
+            GameObject go = UnityEngine.Object.Instantiate(prefab);
+
+            ComponentID cID = go.GetComponent<ComponentID>();
+            if (cID == null)
+            {
+                string msg = $"Prefab {prefab.name} missing ComponentID";
+                Debug.LogError($"[SaveManager]: SPAWN failed--{msg}");
+                UnityEngine.Object.Destroy(go);
+                continue;
+            }
+
+            // Populate the spawned object. TODO: Rework ComponentID class so
+            // this doesn't all have to be done manually
+            cID.id = id;
+            cID.label = state.label;
+            cID.index = state.index;
+
+            state.Apply_ObjectState(cID);
+
+            Register(cID);
+            cID.MarkRegistered();
+                
+            sCt++;
         }
 
         // Restore type counts from loaded objects
@@ -163,5 +210,23 @@ public class SaveManager
         loadStats += $"Objects DELETED: {dCt} ; ";
         loadStats += $"Objects TO SPAWN: {sCt}";
         Debug.Log($"[SaveManager]: {loadStats}");
+
+        // TODO: FINISH
+        // Re-enable interactions
+        isLoadingOrSaving = false;
+    }
+
+    GameObject ResolvePrefab(ComponentTypes.Types type)
+    {
+        string key = type.ToString();
+        GameObject prefab = Resources.Load<GameObject>($"Components/{key}");
+
+        if (prefab == null)
+        {
+            string pfPath = $"Resources/Components/{key}.prefab";
+            Debug.LogError($"[SaveManager]: No prefab found at {pfPath}");
+        }
+
+        return prefab;
     }
 }

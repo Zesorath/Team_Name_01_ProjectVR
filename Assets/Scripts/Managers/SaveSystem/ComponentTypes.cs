@@ -13,10 +13,13 @@ public class ComponentTypes
         WIRE,
         WIRE_START,
         WIRE_END,
-        POWER_SOURCE,
+        DIRECT_CURRENT,
         RESISTOR,
         LED,      
-        GROUND,    
+        GROUND,
+        SWITCH,
+        CAPACITOR,
+        BLOCK,
         OTHER,
         TYPES_COUNT // This one must always be last
     }
