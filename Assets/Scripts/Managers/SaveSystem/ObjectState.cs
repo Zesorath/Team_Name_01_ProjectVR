@@ -23,10 +23,10 @@ public class ObjectState
     // For serializing
     public void Capture_ObjectState(ComponentID cID)
     {
-        Debug.Log($"[ObjectState]: Caturing component {cID.id} state");
+        Log($"CAPTURING component {cID.id} state");
         if (cID == null) 
         {
-            Debug.Log($"[ObjectState]: CAPTURE STATE FAILED--no ComponentID");
+            Error($"CAPTURE STATE FAILED--no ComponentID");
             return;
         }
         
@@ -44,16 +44,16 @@ public class ObjectState
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { ledVoltage = led.CurrentVoltage; }
 
-        Debug.Log($"[ObjectState]: {cID.id} state CAPTURED");
+        Success($"{cID.id} state CAPTURED");
     }
 
     // For deserializing
     public void Apply_ObjectState(ComponentID cID)
     {
-        Debug.Log($"[ObjectState]: Applying saved state to component {cID.id}");
+        Log($"APPLYING saved state to component {cID.id}");
         if (cID == null) 
         {
-            Debug.Log($"[ObjectState]: APPLY STATE FAILED--no ComponentID");
+            Error($"APPLY STATE FAILED--no ComponentID");
             return;
         }
 
@@ -71,6 +71,18 @@ public class ObjectState
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { led.CurrentVoltage = ledVoltage; }
 
-        Debug.Log($"[ObjectState]: {cID.id} state APPLIED");
+        Success($"{cID.id} state APPLIED");
     }
+
+    // Debug output
+    string splash = 
+        $"{SaveManager.sysSplash}<color=#039BE5>[ObjectState] </color>";
+
+    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }

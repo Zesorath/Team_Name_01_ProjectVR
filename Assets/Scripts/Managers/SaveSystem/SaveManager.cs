@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System;
 using System.IO;
-using UnityEditor;
 using System.Linq;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
@@ -31,37 +30,38 @@ public class SaveManager
     // Called by ComponentID to register spawned components with save manager
     public void Register(ComponentID cID)
     {
-        Debug.Log($"[SaveManager]: Registering component {cID.id}");
+        Log($"REGISTERING component {cID.id}");
         
         // Registration failure
-        string errMsg = $"[SaveManager]: FAILED TO REGISTER {cID.id}--";
-        if (cID.id == Guid.Empty)
-            { Debug.Log(errMsg + "ID generation failed"); return; }
-        if (cIDs.ContainsKey(cID.id))
-            { Debug.Log(errMsg + "Duplicate ID"); return; }
+        string errMsg = $"FAILED TO REGISTER {cID.id}--";
+        if (cID.id == Guid.Empty) 
+            { Error($"{errMsg}ID generation failed"); return; }
+        if (cIDs.ContainsKey(cID.id)) 
+            { Error($"{errMsg}Duplicate ID"); return; }
 
         // Register component
         cIDs.Add(cID.id, cID);
         if (!saveData.objectStates.ContainsKey(cID.id))
             saveData.objectStates.Add(cID.id, new ObjectState(cID));
         
-        Debug.Log($"[SaveManager]: Component {cID.id} REGISTERED");
+        Success($"Component {cID.id} REGISTERED");
     }
 
+    // TODO: Make this accept only the Guid, since we have the cIDs dictionary
+    // now. It'll give better error readout.
     public void Unregister(ComponentID cID)
     {
         // ComponentID not found
-        string errMsg = $"[SaveManager]: UNREGISTER FAILED--";
         if (cID == null) 
-            { Debug.Log($"{errMsg}NOT FOUND"); return; }
+            { Error($"UNREGISTER FAILED--NOT FOUND"); return; }
         
-        Debug.Log($"[SaveManager]: Unregistering component {cID.id}");
+        Log($"UNREGISTERING component {cID.id}");
 
         // Unregister component
         cIDs.Remove(cID.id);
         saveData.objectStates.Remove(cID.id);
 
-        Debug.Log($"[SaveManager]: Component {cID.id} UNREGISTERED");
+        Success($"Component {cID.id} UNREGISTERED");
     }
     
     public void QuickSave() { Save(); }
@@ -69,7 +69,7 @@ public class SaveManager
     // Saves the current scene state to file
     public void Save()
     {       
-        Debug.Log("[SaveManager]: Save() CALLED");
+        Log("Save() CALLED");
 
         // TODO: FINISH
         // Disable interactions while actively saving/loading (currently stub)
@@ -81,13 +81,13 @@ public class SaveManager
         
         // Create the saveFiles folder, if it does not exist
         string sfp = paths.saveFilesPath;
-        Debug.Log($"[SaveManager]: Searching for save directory {sfp}");
+        Log($"Searching for save directory {sfp}");
         if (Directory.Exists(sfp)) 
-            { Debug.Log($"[SaveManager]: {sfp} FOUND. Saving"); }
+            { Success($"{sfp} FOUND. Saving"); }
         else
         {
+            Warn($"{sfp} NOT FOUND. Creating");
             Directory.CreateDirectory(sfp);
-            Debug.Log($"[SaveManager]: CREATED {sfp}");
         }
 
         // Serialize and write to file
@@ -99,10 +99,10 @@ public class SaveManager
             {
                 sw.WriteLine(JsonUtility.ToJson(saveData, prettyPrint: true));
             }
-            Debug.Log($"[SaveManager]: SAVED to {sfPath}");
+            Success($"SAVED to {sfPath}");
         }
         catch (Exception e)
-            { Debug.Log($"[SaveManager]: SAVE FAILED--{e.Message}"); }
+            { Error($"SAVE FAILED--{e.Message}"); }
         
         // TODO: FINISH
         // Re-enable interactions
@@ -116,7 +116,7 @@ public class SaveManager
     // objects to update, delete, or spawn.
     public void Load(string saveFileName) 
     {
-        Debug.Log("[SaveManager]: Load() CALLED");
+        Log("Load() CALLED");
 
         // TODO: FINISH
         // Disable interactions while actively saving/loading (currently stub)
@@ -127,15 +127,14 @@ public class SaveManager
         try
         {
             JsonUtility.FromJsonOverwrite(File.ReadAllText(sfPath), saveData);
-            Debug.Log($"[SaveManager]: LOADED from {sfPath}");
+            Success($"LOADED from {sfPath}");
         }
         catch (Exception e)
-            { Debug.Log($"[SaveManager]: LOAD FAILED--{e.Message}"); return; }
+            { Error($"LOAD FAILED--{e.Message}"); return; }
         
         // PRUNE: Delete objects in the current scene and not in the save file
-        int expectDelCt = cIDs.Count - saveData.objectStates.Count;
-        if (expectDelCt < 0) expectDelCt = 0;
-        Debug.Log($"[SaveManager]: PRUNE expected to delete {expectDelCt}");
+        int expectDelCt = Math.Max(0, cIDs.Count - saveData.objectStates.Count);
+        Log($"PRUNE expected to delete {expectDelCt}");
         
         int dCt = 0;
         Guid[] liveIDs = cIDs.Keys.ToArray();
@@ -148,8 +147,16 @@ public class SaveManager
             
             if (!saveData.objectStates.ContainsKey(id))
             {
-                Debug.Log($"[SaveManager]: PRUNE deleting {id}");
-                ccb.Delete();
+                Log($"PRUNE deleting {id}");
+                if (ccb != null) ccb.Delete();
+                
+                // Bandaid code to fix wires not despawning on load, because 
+                // they don't have a CircuitComponentBase
+                else
+                {
+                    Unregister(cIDs[id]);
+                    UnityEngine.Object.Destroy(go);
+                }
                 dCt++;
             }
         }
@@ -161,9 +168,8 @@ public class SaveManager
 
         // TODO: Finish
         // SPAWN objects in the save file but not the current scene
-        int expectSpnCt = saveData.objectStates.Count - cIDs.Count;
-        if (expectSpnCt < 0) expectSpnCt = 0;
-        Debug.Log($"[SaveManager]: SPAWN expected to spawn {expectSpnCt}");
+        int expectSpnCt = Math.Max(0, saveData.objectStates.Count - cIDs.Count);
+        Log($"SPAWN expected to spawn {expectSpnCt}");
 
         int sCt = 0;
         foreach (Guid id in saveData.objectStates.Keys)
@@ -171,7 +177,7 @@ public class SaveManager
             
             if (cIDs.ContainsKey(id)) { continue; }
 
-            Debug.Log($"[SaveManager]: SPAWN creating {id}");
+            Log($"SPAWN creating {id}");
 
             ObjectState state = saveData.objectStates[id];
             GameObject prefab = ResolvePrefab(state.type);
@@ -183,7 +189,7 @@ public class SaveManager
             if (cID == null)
             {
                 string msg = $"Prefab {prefab.name} missing ComponentID";
-                Debug.LogError($"[SaveManager]: SPAWN failed--{msg}");
+                Error($"SPAWN failed--{msg}");
                 UnityEngine.Object.Destroy(go);
                 continue;
             }
@@ -206,16 +212,14 @@ public class SaveManager
         types.RestoreTypeCounters(saveData);
         
         // Display successful load stats
-        string loadStats = $"Objects UPDATED: {uCt} ; ";
-        loadStats += $"Objects DELETED: {dCt} ; ";
-        loadStats += $"Objects TO SPAWN: {sCt}";
-        Debug.Log($"[SaveManager]: {loadStats}");
+        Log($"UPDATED: {uCt} ; DELETED: {dCt} ; SPAWNED: {sCt}");
 
         // TODO: FINISH
         // Re-enable interactions
         isLoadingOrSaving = false;
     }
 
+    // Get the necessary prefab for spawn-from-file
     GameObject ResolvePrefab(ComponentTypes.Types type)
     {
         string key = type.ToString();
@@ -224,9 +228,21 @@ public class SaveManager
         if (prefab == null)
         {
             string pfPath = $"Resources/Components/{key}.prefab";
-            Debug.LogError($"[SaveManager]: No prefab found at {pfPath}");
+            Error($"No prefab found at {pfPath}");
         }
 
         return prefab;
     }
+
+    // Debug output
+    public static string sysSplash = "<color=#FFFFFF>[SaveSystem]</color>";
+    string splash = $"<color=#29B6F6>[SaveManager] </color>";
+
+    void Log(string msg) { Debug.Log($"{sysSplash}{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{sysSplash}{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{sysSplash}{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{sysSplash}{splash}<color=#B71C1C>{msg}</color>"); }
 }

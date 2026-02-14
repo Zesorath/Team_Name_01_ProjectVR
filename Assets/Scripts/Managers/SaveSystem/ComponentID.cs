@@ -14,21 +14,22 @@ public class ComponentID : MonoBehaviour
 
     // Acts as a constructor. Generates a unique ID if one doesn't already 
     // exist, and calls GenerateLabelSuggestion() to populate the label field
+    // TODO: This needs to not call Register()
     void Init()
     {
         // id will already exist if building from a save file
         if (id == Guid.Empty) id = Guid.NewGuid();
 
         // Error states--abort initialization
-        string errMsg = "[ComponentID]: Initialization failure--";
+        string errMsg = "Init() FAILURE--";
         if (SaveManager.Instance == null)
-            { Debug.Log($"{errMsg}NO SAVE MANAGER INSTANCE"); return; }
+            { Error($"{errMsg}No SaveManager instance"); return; }
 
         GenerateLabelSuggestion();
-        if (label == "") { Debug.Log($"{errMsg}NO LABEL GENERATED"); return; }
+        if (label == "") { Error($"{errMsg}No label generated"); return; }
 
         // Initialization succeeded--register component
-        Debug.Log($"[ComponentID]: INITIALIZED--ID = {id}, label = {label}");
+        Success($"INITIALIZED--ID = {id}, label = {label}");
         SaveManager.Instance.Register(this);
         registered = true;
     }
@@ -38,18 +39,18 @@ public class ComponentID : MonoBehaviour
     // from the type's current count.
     void GenerateLabelSuggestion()
     {
-        string errMsg = "[ComponentID]: Label generation failure--";
+        string errMsg = "LABEL GENERATION FAILURE--";
         
         // Label generation failure
         if (type == ComponentTypes.Types.DEFAULT)
-            { Debug.Log($"{errMsg}COMPONENT TYPE NOT SPECIFIED"); return; }
+            { Error($"{errMsg}Component type not specified"); return; }
         
         index = SaveManager.Instance.types.GetNextTypeIndex(type);
-        if (index == 0) { Debug.Log($"{errMsg}INDEX NOT FOUND"); return; }
+        if (index == 0) { Error($"{errMsg}Index not found"); return; }
 
         // Found both parts--generate label
         label = $"{type}_{index}";
-        Debug.Log($"[ComponentID]: GENERATED LABEL {label} for component {id}");
+        Success($"GENERATED LABEL {label} for component {id}");
     }
 
     // Used to flip registered bool for Register() when spawning from save file
@@ -65,6 +66,7 @@ public class ComponentID : MonoBehaviour
     // LIFETIME FIELDS AND FUNCTIONS
 
     // Used for registering on first release, to avoid a bug in Load()
+    // TODO: This didn't fix the bug. Fix the bug lol
     bool registered = false;
     XRGrabInteractable grab;
     // Spawner to avoid
@@ -78,11 +80,7 @@ public class ComponentID : MonoBehaviour
         // Grab a reference to the XR component
         grab = GetComponent<XRGrabInteractable>();
         if (grab == null) 
-        {
-            string msg = $"{gameObject.name} missing XRGrabInteractable";
-            Debug.Log($"[ComponentID]: {msg}");
-            return;
-        }
+            { Error($"{gameObject.name} missing XRGrabInteractable"); return; }
 
         // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
@@ -130,5 +128,17 @@ public class ComponentID : MonoBehaviour
     }
 
     // Just announce when the ComponentID object is destroyed
-    public void OnDestroy() { Debug.Log($"[ComponentID]: DESTROYED {id}"); }
+    public void OnDestroy() { Log($"DESTROYED {id}"); }
+
+    // Debug output
+    string splash = 
+        $"{SaveManager.sysSplash}<color=#64B5F6>[ComponentID] </color>";
+
+    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }
