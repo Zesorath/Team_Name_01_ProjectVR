@@ -24,16 +24,4 @@ public abstract class CircuitComponentBase : MonoBehaviour
 
         return ports;
     }
-
-    // Do whatever needs to be done for the deletion to go smoothly here
-    public void Delete()
-    {
-        SaveManager sm = SaveManager.Instance;
-        ComponentID cID = gameObject.GetComponent<ComponentID>();
-
-        // Unregister object from save manager
-        sm.Unregister(cID);
-
-        Destroy(gameObject);
-    }
 }

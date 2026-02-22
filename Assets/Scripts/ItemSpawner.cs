@@ -34,13 +34,18 @@ public class ItemSpawner : MonoBehaviour
 
     void Spawn()
     {
-        // Spawn unparented
-        GameObject inst = Instantiate(Item_To_Spawn, transform.position, transform.rotation);
+        // Spawn as a child of the ItemSpawner. Unparents later on when leaving
+        // the spawner
+        GameObject go = Instantiate(Item_To_Spawn, transform);
+        go.transform.localPosition = Vector3.zero;
+        go.transform.localRotation = Quaternion.identity;
 
-        // Keep the SAME apparent world size it had when it was parented under this spawner
-        inst.transform.localScale = Vector3.Scale(Item_To_Spawn.transform.localScale, transform.lossyScale);
-
-        LastItem = inst;
+        // Mark spawned object as display
+        ComponentID cID = go.GetComponent<ComponentID>();
+        if (cID != null) cID.isDisplay = true;
+        
+        // Remember the last spawned object
+        LastItem = go;
     }
 
 }

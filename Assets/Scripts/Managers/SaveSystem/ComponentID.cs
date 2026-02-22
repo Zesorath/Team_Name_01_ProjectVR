@@ -14,7 +14,7 @@ public class ComponentID : MonoBehaviour
 
     // Acts as a constructor. Generates a unique ID if one doesn't already 
     // exist, and calls GenerateLabelSuggestion() to populate the label field
-    // TODO: This needs to not call Register()
+    // TODO: This needs to not call Register(), maybe
     void Init()
     {
         // id will already exist if building from a save file
@@ -32,6 +32,14 @@ public class ComponentID : MonoBehaviour
         Success($"INITIALIZED--ID = {id}, label = {label}");
         SaveManager.Instance.Register(this);
         registered = true;
+    }
+
+    public void Delete()
+    {
+        SaveManager sm = SaveManager.Instance;
+
+        sm.Unregister(this);
+        Destroy(gameObject);
     }
 
     // Generates a label from the component type and the next available index 
@@ -68,6 +76,7 @@ public class ComponentID : MonoBehaviour
     // Used for registering on first release, to avoid a bug in Load()
     // TODO: This didn't fix the bug. Fix the bug lol
     bool registered = false;
+    public bool isDisplay = false;
     XRGrabInteractable grab;
     // Spawner to avoid
     ItemSpawner os; // Origin spawner
@@ -94,7 +103,7 @@ public class ComponentID : MonoBehaviour
             
             // The other option is that the components already exist in the
             // scene as part of the level
-            Init(); 
+            if (isDisplay == false) Init(); 
             return;
         }
 
@@ -110,9 +119,11 @@ public class ComponentID : MonoBehaviour
         if (registered) return;
 
         // Register first time object is released outside the spawner radius, 
-        // plus a tiny epsilon to prevent jitter
+        // plus a tiny epsilon to prevent jitter. Un=parent it and mark as no
+        // longer display
         float d = Vector3.Distance(transform.position, osTransform.position);
-        if (d > osRadius + 0.01f) Init();
+        if (d > osRadius + 0.01f && isDisplay == true) 
+            { Init(); isDisplay = false; os.transform.SetParent(null); }
     }
 
     // Subscribe to grab listener on Awake()

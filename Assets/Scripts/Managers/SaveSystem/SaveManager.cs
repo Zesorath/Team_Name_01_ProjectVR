@@ -139,24 +139,11 @@ public class SaveManager
         int dCt = 0;
         Guid[] liveIDs = cIDs.Keys.ToArray();
         foreach (Guid id in liveIDs)
-        {
-            // Delete() is in CircuitComponentBase class. It unregisters and
-            // everything
-            GameObject go = cIDs[id].gameObject;
-            CircuitComponentBase ccb = go.GetComponent<CircuitComponentBase>();
-            
+        {           
             if (!saveData.objectStates.ContainsKey(id))
             {
                 Log($"PRUNE deleting {id}");
-                if (ccb != null) ccb.Delete();
-                
-                // Bandaid code to fix wires not despawning on load, because 
-                // they don't have a CircuitComponentBase
-                else
-                {
-                    Unregister(cIDs[id]);
-                    UnityEngine.Object.Destroy(go);
-                }
+                cIDs[id].Delete();
                 dCt++;
             }
         }
@@ -183,7 +170,7 @@ public class SaveManager
             GameObject prefab = ResolvePrefab(state.type);
             if (prefab == null) continue;
 
-            GameObject go = UnityEngine.Object.Instantiate(prefab);
+            GameObject go = UnityEngine.Object.Instantiate(prefab, state.position, state.rotation);
 
             ComponentID cID = go.GetComponent<ComponentID>();
             if (cID == null)
