@@ -57,10 +57,24 @@ public class ObjectState
             return;
         }
 
+        // Split because only the fields need to be applied on Load()
+        Apply_Transform(cID);
+        Apply_Fields(cID);
+
+        Success($"{cID.id} state APPLIED");
+    }
+
+    public void Apply_Transform(Component cID)
+    {
         GameObject go = cID.gameObject;
 
         go.transform.position = position;
         go.transform.rotation = rotation;
+    }
+
+    public void Apply_Fields(ComponentID cID)
+    {
+        GameObject go = cID.gameObject;
 
         DCSource dc = go.GetComponent<DCSource>();
         if (dc != null) { dc.voltage = voltage; }
@@ -70,8 +84,6 @@ public class ObjectState
 
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { led.CurrentVoltage = ledVoltage; }
-
-        Success($"{cID.id} state APPLIED");
     }
 
     // Debug output

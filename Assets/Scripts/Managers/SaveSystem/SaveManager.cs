@@ -170,7 +170,9 @@ public class SaveManager
             GameObject prefab = ResolvePrefab(state.type);
             if (prefab == null) continue;
 
-            GameObject go = UnityEngine.Object.Instantiate(prefab, state.position, state.rotation);
+            GameObject go = UnityEngine.Object.Instantiate(
+                prefab, state.position, state.rotation
+            );
 
             ComponentID cID = go.GetComponent<ComponentID>();
             if (cID == null)
@@ -187,7 +189,7 @@ public class SaveManager
             cID.label = state.label;
             cID.index = state.index;
 
-            state.Apply_ObjectState(cID);
+            state.Apply_Fields(cID);
 
             Register(cID);
             cID.MarkRegistered();
