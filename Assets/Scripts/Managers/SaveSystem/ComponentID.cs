@@ -123,7 +123,7 @@ public class ComponentID : MonoBehaviour
         // longer display
         float d = Vector3.Distance(transform.position, osTransform.position);
         if (d > osRadius + 0.01f && isDisplay == true) 
-            { Init(); isDisplay = false; os.transform.SetParent(null); }
+            { transform.SetParent(null); isDisplay = false; Init(); }
     }
 
     // Subscribe to grab listener on Awake()
