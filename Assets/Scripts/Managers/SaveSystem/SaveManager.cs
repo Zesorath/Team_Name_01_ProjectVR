@@ -65,6 +65,10 @@ public class SaveManager
     }
     
     public void QuickSave() { Save(); }
+    public void SaveToSlot(int slotNo)
+    {
+        Log($"STUB: Saving to slot {slotNo}");
+    }
 
     // Saves the current scene state to file
     public void Save()
@@ -110,6 +114,10 @@ public class SaveManager
     }
 
     public void QuickLoad() { Load(man.lastSave); }
+    public void LoadFromSlot(int slotNo)
+    {
+        Log($"STUB: Loading from slot {slotNo}");
+    }
 
     // Load a saved scene from the save file. Compares current registered
     // ComponentIDs in cIDs with the de-serialized saveData to determine which

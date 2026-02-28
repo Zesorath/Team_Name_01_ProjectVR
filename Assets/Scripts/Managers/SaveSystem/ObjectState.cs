@@ -64,7 +64,7 @@ public class ObjectState
         Success($"{cID.id} state APPLIED");
     }
 
-    public void Apply_Transform(Component cID)
+    void Apply_Transform(Component cID)
     {
         GameObject go = cID.gameObject;
 

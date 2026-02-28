@@ -73,8 +73,7 @@ public class ComponentID : MonoBehaviour
 
     // LIFETIME FIELDS AND FUNCTIONS
 
-    // Used for registering on first release, to avoid a bug in Load()
-    // TODO: This didn't fix the bug. Fix the bug lol
+    // Used for registering on first release
     bool registered = false;
     public bool isDisplay = false;
     XRGrabInteractable grab;
