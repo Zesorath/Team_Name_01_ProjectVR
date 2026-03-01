@@ -23,7 +23,7 @@ public class SaveData : ISerializationCallbackReceiver
     // SaveData -> serializable
     public void OnBeforeSerialize()
     {
-        Debug.Log("[SaveData]: OnBeforeSerialize firing");
+        Log("OnBeforeSerialize firing");
 
         states_serial.Clear();
         foreach (var kvp in objectStates)
@@ -33,14 +33,13 @@ public class SaveData : ISerializationCallbackReceiver
             );
         }
 
-        Debug.Log($"[SaveData]: Serialized {states_serial.Count} objects");
+        Success($"SERIALIZED {states_serial.Count} objects");
     }
 
-    // TODO: Handle cIDs dictionary
     // Serializable -> SaveData
     public void OnAfterDeserialize()
     {
-        Debug.Log("[SaveData]: OnAfterDeserialize firing");
+        Log("OnAfterDeserialize firing");
 
         objectStates.Clear();
         foreach (var s in states_serial)
@@ -48,6 +47,18 @@ public class SaveData : ISerializationCallbackReceiver
             objectStates.Add( Guid.Parse(s.id), s.state );
         }
 
-        Debug.Log($"[SaveData]: Deserialized {objectStates.Count} objects");
+        Success($"DESERIALIZED {objectStates.Count} objects");
     }
+
+    // Debug output
+    string splash = 
+        $"{SaveManager.sysSplash}<color=#1565C0>[SaveData] </color>";
+
+    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }

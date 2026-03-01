@@ -14,23 +14,32 @@ public class ComponentID : MonoBehaviour
 
     // Acts as a constructor. Generates a unique ID if one doesn't already 
     // exist, and calls GenerateLabelSuggestion() to populate the label field
+    // TODO: This needs to not call Register(), maybe
     void Init()
     {
         // id will already exist if building from a save file
         if (id == Guid.Empty) id = Guid.NewGuid();
 
         // Error states--abort initialization
-        string errMsg = "[ComponentID]: Initialization failure--";
+        string errMsg = "Init() FAILURE--";
         if (SaveManager.Instance == null)
-            { Debug.Log($"{errMsg}NO SAVE MANAGER INSTANCE"); return; }
+            { Error($"{errMsg}No SaveManager instance"); return; }
 
         GenerateLabelSuggestion();
-        if (label == "") { Debug.Log($"{errMsg}NO LABEL GENERATED"); return; }
+        if (label == "") { Error($"{errMsg}No label generated"); return; }
 
         // Initialization succeeded--register component
-        Debug.Log($"[ComponentID]: INITIALIZED--ID = {id}, label = {label}");
+        Success($"INITIALIZED--ID = {id}, label = {label}");
         SaveManager.Instance.Register(this);
         registered = true;
+    }
+
+    public void Delete()
+    {
+        SaveManager sm = SaveManager.Instance;
+
+        sm.Unregister(this);
+        Destroy(gameObject);
     }
 
     // Generates a label from the component type and the next available index 
@@ -38,19 +47,22 @@ public class ComponentID : MonoBehaviour
     // from the type's current count.
     void GenerateLabelSuggestion()
     {
-        string errMsg = "[ComponentID]: Label generation failure--";
+        string errMsg = "LABEL GENERATION FAILURE--";
         
         // Label generation failure
         if (type == ComponentTypes.Types.DEFAULT)
-            { Debug.Log($"{errMsg}COMPONENT TYPE NOT SPECIFIED"); return; }
+            { Error($"{errMsg}Component type not specified"); return; }
         
         index = SaveManager.Instance.types.GetNextTypeIndex(type);
-        if (index == 0) { Debug.Log($"{errMsg}INDEX NOT FOUND"); return; }
+        if (index == 0) { Error($"{errMsg}Index not found"); return; }
 
         // Found both parts--generate label
         label = $"{type}_{index}";
-        Debug.Log($"[ComponentID]: GENERATED LABEL {label} for component {id}");
+        Success($"GENERATED LABEL {label} for component {id}");
     }
+
+    // Used to flip registered bool for Register() when spawning from save file
+    public void MarkRegistered() { registered = true; }
 
     // User can also specify their own label for a component
     public void ChangeLabel(string newLabel) { label = newLabel; }
@@ -61,8 +73,9 @@ public class ComponentID : MonoBehaviour
 
     // LIFETIME FIELDS AND FUNCTIONS
 
-    // Used for registering on first release, to avoid a bug in Load()
+    // Used for registering on first release
     bool registered = false;
+    public bool isDisplay = false;
     XRGrabInteractable grab;
     // Spawner to avoid
     ItemSpawner os; // Origin spawner
@@ -75,16 +88,23 @@ public class ComponentID : MonoBehaviour
         // Grab a reference to the XR component
         grab = GetComponent<XRGrabInteractable>();
         if (grab == null) 
-        {
-            string msg = $"{gameObject.name} missing XRGrabInteractable";
-            Debug.Log($"[ComponentID]: {msg}");
-            return;
-        }
+            { Error($"{gameObject.name} missing XRGrabInteractable"); return; }
 
-        // There will be no ItemSpawner if the object is spawned from save file,
+        // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
         os = GetComponentInParent<ItemSpawner>();
-        if (os == null) { Init(); return; }
+        if (os == null)
+        {            
+            // Set id/label/index and Register() will happen manually on Load()
+            // NOTE: This might change later on
+            SaveManager sm = SaveManager.Instance;
+            if (sm != null && sm.isLoadingOrSaving) return;
+            
+            // The other option is that the components already exist in the
+            // scene as part of the level
+            if (isDisplay == false) Init(); 
+            return;
+        }
 
         // Otherwise, cache origin spawner's position, rotation, and size
         osTransform = os.transform;
@@ -98,9 +118,11 @@ public class ComponentID : MonoBehaviour
         if (registered) return;
 
         // Register first time object is released outside the spawner radius, 
-        // plus a tiny epsilon to prevent jitter
+        // plus a tiny epsilon to prevent jitter. Un=parent it and mark as no
+        // longer display
         float d = Vector3.Distance(transform.position, osTransform.position);
-        if (d > osRadius + 0.01f) Init();
+        if (d > osRadius + 0.01f && isDisplay == true) 
+            { transform.SetParent(null); isDisplay = false; Init(); }
     }
 
     // Subscribe to grab listener on Awake()
@@ -115,9 +137,18 @@ public class ComponentID : MonoBehaviour
         if (grab != null) grab.selectExited.RemoveListener(OnReleased);
     }
 
-    // Move id/label generation and registration (basically everything in old Awake()) to OnRelease()
-
-
     // Just announce when the ComponentID object is destroyed
-    public void OnDestroy() { Debug.Log($"[ComponentID]: DESTROYED {id}"); }
+    public void OnDestroy() { Log($"DESTROYED {id}"); }
+
+    // Debug output
+    string splash = 
+        $"{SaveManager.sysSplash}<color=#64B5F6>[ComponentID] </color>";
+
+    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }
