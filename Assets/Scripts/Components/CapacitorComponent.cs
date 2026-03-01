@@ -10,13 +10,9 @@ public class CapacitorComponent : CircuitComponentBase
     // seeded by CircuitManager across rebuilds
     [HideInInspector] public double initialVoltage = 0.0;
 
-    public override void AddToSpice(Circuit ckt, string nodeA, string nodeB)
+    public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        var cap = new Capacitor($"{componentId}_C", nodeA, nodeB, capacitanceFarads);
-
-        // Works in SpiceSharp via parameter system:
-        cap.SetParameter("ic", initialVoltage);
-
-        ckt.Add(cap);
+        string cName = $"C_{componentId}";
+        ckt.Add(new SpiceSharp.Components.Capacitor(cName, nodeA, nodeB, capacitanceFarads));
     }
 }
