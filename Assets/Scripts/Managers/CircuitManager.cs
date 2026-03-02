@@ -28,6 +28,10 @@ public class CircuitManager : MonoBehaviour
     // Must use the same node mapping used for the netlist
     private Dictionary<CircuitComponentBase, (string nodeA, string nodeB)> _activeNodesByComp
         = new Dictionary<CircuitComponentBase, (string nodeA, string nodeB)>();
+
+    // Track which group was last simulated so we can snapshot caps before we stop transient.
+    private List<CircuitComponentBase> _activeGroup = null;
+
     [Header("Cap Debug")]
     public bool debugCapacitor = true;
     public float capDebugPrintEverySeconds = 0.10f;
@@ -35,6 +39,27 @@ public class CircuitManager : MonoBehaviour
 
     // Persist capacitor voltage across rebuilds (by componentId)
     private readonly Dictionary<string, double> _capVoltageById = new();
+
+    // ===========================
+    // STOPGAP CAP HOLD SETTINGS
+    // ===========================
+    [Header("STOPGAP: Hold capacitor charge before rebuild")]
+    public bool enableCapHoldStopgap = true;
+
+    [Tooltip("If any capacitor cached voltage magnitude exceeds this, we delay rebuild.")]
+    public float capHoldThresholdVolts = 0.05f;
+
+    [Tooltip("Simulated leakage resistance used to decay capacitor voltage (higher = slower discharge).")]
+    public float capLeakResistanceOhms = 2000f;
+
+    [Tooltip("Hard safety limit: even if cap never decays, rebuild after this many seconds.")]
+    public float capHoldMaxSeconds = 2.0f;
+
+    [Tooltip("If true, fade all LEDs during hold based on max capacitor voltage (visual stopgap).")]
+    public bool capHoldFadeLeds = true;
+
+    private Coroutine _capHoldRoutine = null;
+
     private void Awake()
     {
         Instance = this;
@@ -49,13 +74,167 @@ public class CircuitManager : MonoBehaviour
     {
         Debug.Log("[CircuitManager] Connection changed — rebuilding...");
 
+        // Snapshot capacitor states from the active transient BEFORE stopping it
+        // so cached voltage survives topology changes.
+        SnapshotCapsFromActiveTransientIfAny();
+
+        // If stopgap hold mode triggers, we DO NOT rebuild immediately.
+        if (TryStartCapHoldStopgap())
+            return;
+
+        StopActiveTransientIfAny();
+        RebuildAndSimulate();
+    }
+
+    // ---------------------------
+    // Stopgap helpers
+    // ---------------------------
+    private void StopActiveTransientIfAny()
+    {
         if (_transientRoutine != null)
         {
             StopCoroutine(_transientRoutine);
             _transientRoutine = null;
         }
 
+        _activeTran = null;
+        _activeNodesByComp = new Dictionary<CircuitComponentBase, (string nodeA, string nodeB)>();
+        _activeGroup = null;
+    }
+
+    private void SnapshotCapsFromActiveTransientIfAny()
+    {
+        // If we were running, grab the cap voltages from the old tran before killing it.
+        if (_activeTran == null) return;
+        if (_activeGroup == null || _activeGroup.Count == 0) return;
+        if (_activeNodesByComp == null || _activeNodesByComp.Count == 0) return;
+
+        foreach (var cap in _activeGroup.OfType<CapacitorComponent>())
+        {
+            if (cap == null) continue;
+            if (!_activeNodesByComp.TryGetValue(cap, out var nn)) continue;
+
+            double vA, vB;
+            try { vA = _activeTran.GetVoltage(nn.nodeA); } catch { continue; }
+            try { vB = _activeTran.GetVoltage(nn.nodeB); } catch { continue; }
+
+            _capVoltageById[cap.componentId] = vA - vB;
+        }
+    }
+
+    private bool TryStartCapHoldStopgap()
+    {
+        if (!enableCapHoldStopgap) return false;
+
+        // Only makes sense if we have caps and they have cached voltage.
+        float maxAbs = GetMaxAbsCachedCapVoltage();
+        if (maxAbs < capHoldThresholdVolts) return false;
+
+        // Don’t stack multiple hold routines.
+        if (_capHoldRoutine != null)
+        {
+            // already holding; do nothing
+            return true;
+        }
+
+        // Stop SPICE transient now (we’ll fake discharge visually).
+        StopActiveTransientIfAny();
+
+        Debug.Log($"[CircuitManager][CAP-HOLD] Delaying rebuild. max|Vcap|={maxAbs:F3}V");
+
+        _capHoldRoutine = StartCoroutine(CapHoldAndThenRebuild());
+        return true;
+    }
+
+    private float GetMaxAbsCachedCapVoltage()
+    {
+        float maxAbs = 0f;
+        foreach (var kv in _capVoltageById)
+            maxAbs = Mathf.Max(maxAbs, Mathf.Abs((float)kv.Value));
+        return maxAbs;
+    }
+
+    private IEnumerator CapHoldAndThenRebuild()
+    {
+        // We simulate discharge: V(t+dt) = V(t) * exp(-dt/(R*C))
+        // per capacitor (using reflection to read capacitance).
+        float elapsed = 0f;
+
+        while (elapsed < capHoldMaxSeconds)
+        {
+            float dt = Time.deltaTime;
+            elapsed += dt;
+
+            bool anyAbove = false;
+            float maxAbs = 0f;
+
+            // Update each capacitor’s cached voltage
+            // (if C unknown, we just hold it constant until timeout)
+            var capIds = _capVoltageById.Keys.ToList();
+
+            // If there are no caps cached, break early.
+            if (capIds.Count == 0) break;
+
+            foreach (var capId in capIds)
+            {
+                double v = _capVoltageById[capId];
+
+                // Find the capacitor component (optional; to read C). If not found, degrade gracefully.
+                CapacitorComponent cap = FindCapById(capId);
+                double cF = (cap != null) ? GetCapacitanceFarads(cap) : 0.0;
+
+                if (cF > 0.0 && capLeakResistanceOhms > 0.0)
+                {
+                    double tau = capLeakResistanceOhms * cF;
+                    if (tau > 1e-9)
+                    {
+                        double decay = Math.Exp(-(double)dt / tau);
+                        v *= decay;
+                    }
+                }
+
+                _capVoltageById[capId] = v;
+
+                float av = Mathf.Abs((float)v);
+                maxAbs = Mathf.Max(maxAbs, av);
+                if (av >= capHoldThresholdVolts) anyAbove = true;
+            }
+
+            // Visual stopgap: fade LEDs based on remaining cap voltage
+            if (capHoldFadeLeds)
+            {
+                // Use maxAbs as a stand-in for "available power".
+                // If you want, you can scale this relative to your DC voltage (5V).
+                float pseudoDrop = maxAbs;
+                foreach (var led in UnityEngine.Object.FindObjectsByType<LED_Component>(FindObjectsSortMode.None))
+                {
+                    if (led == null) continue;
+                    led.UpdateLEDState(pseudoDrop);
+                }
+            }
+
+            // If everything is discharged, we can rebuild now.
+            if (!anyAbove)
+                break;
+
+            yield return null;
+        }
+
+        Debug.Log("[CircuitManager][CAP-HOLD] Hold done. Rebuilding now.");
+
+        _capHoldRoutine = null;
         RebuildAndSimulate();
+    }
+
+    private CapacitorComponent FindCapById(string capId)
+    {
+        // Note: this is called during hold; keep it simple.
+        foreach (var cap in UnityEngine.Object.FindObjectsByType<CapacitorComponent>(FindObjectsSortMode.None))
+        {
+            if (cap != null && cap.componentId == capId)
+                return cap;
+        }
+        return null;
     }
 
     private void RebuildAndSimulate()
@@ -178,9 +357,6 @@ public class CircuitManager : MonoBehaviour
             }
 
             // (5) Find connected groups
-         
-            
-
             var visited = new HashSet<CircuitComponentBase>();
             var groups = new List<List<CircuitComponentBase>>();
 
@@ -208,7 +384,7 @@ public class CircuitManager : MonoBehaviour
                 groups.Add(group);
             }
 
-            // (6) Pick ONE best group to simulate (otherwise the last group stops the good one)
+            // (6) Pick ONE best group to simulate
             List<CircuitComponentBase> bestGroup = null;
             int bestScore = int.MinValue;
 
@@ -218,18 +394,14 @@ public class CircuitManager : MonoBehaviour
                 bool hasCap = group.Any(c => c != null && c.GetType().Name == "CapacitorComponent");
                 bool hasLed = group.OfType<LED_Component>().Any();
 
-                // We only care about groups that could produce something meaningful
                 if (!hasDC && !hasCap) continue;
-
-                // Ignore degenerate groups like "DC source by itself"
                 if (group.Count < 2) continue;
 
-                // Score groups so we choose the most interesting one
                 int score = 0;
-                score += group.Count;          // bigger group = usually the real circuit
+                score += group.Count;
                 if (hasDC) score += 10;
                 if (hasLed) score += 50;
-                if (hasCap) score += 100;      // prioritize capacitor groups
+                if (hasCap) score += 100;
 
                 if (score > bestScore)
                 {
@@ -247,7 +419,6 @@ public class CircuitManager : MonoBehaviour
 
                 if (runTransient)
                 {
-                    // IMPORTANT: carry the capacitor’s last voltage into the new run
                     SeedCapInitialVoltages(bestGroup);
 
                     var ckt = BuildSpiceCircuitForGroup(bestGroup, spiceComponents);
@@ -270,7 +441,6 @@ public class CircuitManager : MonoBehaviour
             }
 
         }
-
         finally
         {
             _isRebuilding = false;
@@ -335,19 +505,20 @@ public class CircuitManager : MonoBehaviour
         catch (Exception ex)
         {
             Debug.LogError($"[SPICE TRANSIENT ERROR] {ex.Message}");
-
-            // Try to print inner exception details too (SpiceSharp often nests the useful info)
             if (ex.InnerException != null)
                 Debug.LogError($"[SPICE TRANSIENT ERROR - INNER] {ex.InnerException.Message}");
-
-           yield break;
-
+            yield break;
         }
 
         // Quick lookup so LED updates use the *same nodes used in netlist*
         var nodesByComp = spiceComponents
             .Where(e => e.comp != null && group.Contains(e.comp))
             .ToDictionary(e => e.comp, e => (e.nodeA, e.nodeB));
+
+        // Mark active transient so NotifyConnectionChanged() can snapshot caps safely.
+        _activeTran = tran;
+        _activeNodesByComp = nodesByComp;
+        _activeGroup = group;
 
         double highestVSeen = 0.0;
 
@@ -392,14 +563,19 @@ public class CircuitManager : MonoBehaviour
 
         lastVoltage = (float)highestVSeen;
         Debug.Log($"[CircuitManager] Transient done — lastVoltage={lastVoltage:F3}V");
+
+        // Clear active transient markers (we’re done)
+        _activeTran = null;
+        _activeNodesByComp = new Dictionary<CircuitComponentBase, (string nodeA, string nodeB)>();
+        _activeGroup = null;
     }
+
     private void SeedCapInitialVoltages(List<CircuitComponentBase> group)
     {
         foreach (var cap in group.Where(c => c != null && c.GetType().Name == "CapacitorComponent"))
         {
             if (_capVoltageById.TryGetValue(cap.componentId, out var v0))
             {
-                // set capacitor.initialVoltage via reflection (matches your CapacitorComponent.cs field name)
                 var field = cap.GetType().GetField("initialVoltage");
                 if (field != null && field.FieldType == typeof(double))
                     field.SetValue(cap, v0);
@@ -407,26 +583,6 @@ public class CircuitManager : MonoBehaviour
         }
     }
 
-    private void SnapshotCapStatesFromActiveTransient(List<CircuitComponentBase> group)
-    {
-        if (_activeTran == null) return;
-        if (_activeNodesByComp == null || _activeNodesByComp.Count == 0) return;
-
-        foreach (var cap in group.OfType<CapacitorComponent>())
-        {
-            if (cap == null) continue;
-            if (!_activeNodesByComp.TryGetValue(cap, out var nn)) continue;
-
-            double vA, vB;
-            try { vA = _activeTran.GetVoltage(nn.nodeA); }
-            catch { continue; }
-            try { vB = _activeTran.GetVoltage(nn.nodeB); }
-            catch { continue; }
-
-            // Keep same sign convention you already use elsewhere
-            _capVoltageById[cap.componentId] = vA - vB;
-        }
-    }
     void SaveCapStates(
       Transient tran,
       List<CircuitComponentBase> group,
@@ -448,7 +604,7 @@ public class CircuitManager : MonoBehaviour
                 continue;
             }
 
-            _capVoltageById[cap.componentId] = (float)vcap;
+            _capVoltageById[cap.componentId] = vcap;
         }
     }
 
@@ -457,10 +613,12 @@ public class CircuitManager : MonoBehaviour
         foreach (var l in UnityEngine.Object.FindObjectsByType<LED_Component>(FindObjectsSortMode.None))
             l.UpdateLEDState(0f);
     }
+
     public float GetCachedCapVoltage(string capId)
     {
         return _capVoltageById.TryGetValue(capId, out var v) ? (float)v : 0f;
     }
+
     public void SetCachedCapVoltage(string capId, float v)
     {
         _capVoltageById[capId] = v;
@@ -523,6 +681,7 @@ public class CircuitManager : MonoBehaviour
             double cF = GetCapacitanceFarads(cap);
             double qC = cF * vcap;
             double eJ = 0.5 * cF * vcap * vcap;
+
             CircuitManager.Instance.SetCachedCapVoltage(cap.componentId, (float)vcap);
             Debug.Log($"[CAP] t={tran.Time:F3}s  {cap.componentId}  Vcap={vcap:F4}V  C={cF:E3}F  Q={qC:E3}C  E={eJ:E3}J  ({nn.nodeA}-{nn.nodeB})");
         }
