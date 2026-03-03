@@ -13,38 +13,37 @@ public class SwitchComponent : CircuitComponentBase
     [Header("Handle Interactable (top cylinder)")]
     [SerializeField] private XRBaseInteractable handleInteractable;
 
+    private Resistor _spiceResistor;
+
     protected override void Awake()
     {
         base.Awake();
 
-        // Auto-find if not assigned (important for spawned prefabs)
         if (!handleInteractable)
         {
-            // Prefer an XRSimpleInteractable (your handle)
             handleInteractable = GetComponentInChildren<XRSimpleInteractable>(true);
 
-            // Fallback: any interactable in children
             if (!handleInteractable)
                 handleInteractable = GetComponentInChildren<XRBaseInteractable>(true);
-            var grab = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
-            var handleCol = handleInteractable.GetComponent<Collider>();
+
+            var grab = GetComponent<XRGrabInteractable>();
+            var handleCol = handleInteractable?.GetComponent<Collider>();
 
             if (grab && handleCol)
             {
-                // Ensure grab interactable does NOT use the handle collider
                 grab.colliders.Remove(handleCol);
                 Debug.Log($"[SWITCH] Removed handle collider from grab colliders: {handleCol.name}");
             }
         }
 
-        Debug.Log($"[SWITCH][Awake] {componentId} handleInteractable={(handleInteractable ? handleInteractable.name : "NULL")}");
+        Debug.Log($"[SWITCH][Awake] {componentId}");
     }
 
     private void OnEnable()
     {
         if (!handleInteractable)
         {
-            Debug.LogError($"[SWITCH] {componentId}: handleInteractable is not assigned!");
+            Debug.LogError($"[SWITCH] {componentId}: handleInteractable not assigned!");
             return;
         }
 
@@ -59,21 +58,37 @@ public class SwitchComponent : CircuitComponentBase
 
     private void OnSelectEntered(SelectEnterEventArgs args)
     {
-        Debug.Log($"[SWITCH][SELECT] {componentId} handle selected by {args.interactorObject?.transform.name}");
+        Debug.Log($"[SWITCH][SELECT] {componentId}");
         Toggle();
     }
 
     private void Toggle()
     {
-        bool old = isClosed;
         isClosed = !isClosed;
-        Debug.Log($"[SWITCH][TOGGLE] {componentId}: {old} -> {isClosed}");
-        CircuitManager.Instance?.NotifyConnectionChanged();
+
+        CircuitManager.Instance?.QueueSpiceMutation(() =>
+        {
+            if (_spiceResistor != null)
+            {
+                _spiceResistor.Parameters.Resistance =
+                    isClosed ? 0.1 : 1e9;
+
+                Debug.Log($"[SWITCH] {(isClosed ? "CLOSED" : "OPEN")} safely applied.");
+            }
+        });
     }
 
-    public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
+    public override void AddToSpice(Circuit ckt, string nodeA, string nodeB)
     {
-        double r = IsClosed ? 1e-3 : 1e12; // closed ~ short, open ~ almost infinite
-        ckt.Add(new Resistor($"R_{componentId}_SW", nodeA, nodeB, r));
+        _spiceResistor = new Resistor(
+            $"S_{componentId}",
+            nodeA,
+            nodeB,
+            isClosed ? 1e-3 : 1e15
+        );
+
+        ckt.Add(_spiceResistor);
+
+        Debug.Log($"[SWITCH] Resistor switch added: {nodeA} {nodeB}");
     }
 }
