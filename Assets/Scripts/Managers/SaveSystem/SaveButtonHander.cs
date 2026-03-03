@@ -23,6 +23,16 @@ public class SaveButtonHandler : MonoBehaviour
         SaveManager.Instance.QuickSave();
     }
 
+    public void OnSaveToSlot(int slotNo)
+    {
+        SaveManager.Instance.SaveToSlot(slotNo);
+    }
+
+    public void OnLoadFromSlot(int slotNo)
+    {
+        SaveManager.Instance.LoadFromSlot(slotNo);
+    }
+
     // Calls SaveManager.Load with a filename parameter (e.g. "GUID.json")
     // To use this from a Button in the Inspector, choose the method that
     // accepts a string and type the filename in the inspector field.
