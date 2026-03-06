@@ -555,6 +555,20 @@ public class CircuitManager : MonoBehaviour
                 highestVSeen = Math.Max(highestVSeen, Math.Abs(vA - vB));
             }
 
+            // Update multimeters
+            foreach (var meter in group.OfType<MultimeterComponent>())
+            {
+                if (meter == null) continue;
+                if (!nodesByComp.TryGetValue(meter, out var nn)) continue;
+
+                double vA, vB;
+                try { vA = tran.GetVoltage(nn.nodeA); } catch { continue; }
+                try { vB = tran.GetVoltage(nn.nodeB); } catch { continue; }
+
+                // nodeA = COM (-), nodeB = V+  ->  reading = V+ - COM
+                meter.UpdateReading((float)(vB - vA));
+            }
+
             SaveCapStates(tran, group, nodesByComp);
             DebugCapacitorsStep(tran, group, nodesByComp);
 
@@ -612,6 +626,8 @@ public class CircuitManager : MonoBehaviour
     {
         foreach (var l in UnityEngine.Object.FindObjectsByType<LED_Component>(FindObjectsSortMode.None))
             l.UpdateLEDState(0f);
+        foreach (var m in UnityEngine.Object.FindObjectsByType<MultimeterComponent>(FindObjectsSortMode.None))
+            m.ClearReading();
     }
 
     public float GetCachedCapVoltage(string capId)
