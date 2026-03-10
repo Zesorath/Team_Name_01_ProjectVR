@@ -1,17 +1,23 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class SaveManifest
 {
+    [NonSerialized]
+    readonly SaveDebug d = 
+        new SaveDebug("<color=#1E88E5>[SaveManifest] </color>");
+    
     public string lastSave;
-    public string lastSlotUsed;
+    public int lastSlotUsed = 0;
 
-    public SaveSlot[] slots =
+    SaveSlot[] slots =
     {
-        new SaveSlot { id = 1 },
-        new SaveSlot { id = 2 },
-        new SaveSlot { id = 3 },
-        new SaveSlot { id = 4 },
-        new SaveSlot { id = 5 }
+        new SaveSlot { slotID = 1 },
+        new SaveSlot { slotID = 2 },
+        new SaveSlot { slotID = 3 },
+        new SaveSlot { slotID = 4 },
+        new SaveSlot { slotID = 5 }
     };
+
 }
