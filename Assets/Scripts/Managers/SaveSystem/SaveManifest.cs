@@ -1,23 +1,57 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
+[Serializable]
 public class SaveManifest
 {
-    [NonSerialized]
-    readonly SaveDebug d = 
-        new SaveDebug("<color=#1E88E5>[SaveManifest] </color>");
-    
-    public string lastSave;
-    public int lastSlotUsed = 0;
+    [SerializeField] int lastSlotUsed = 0;
+    [SerializeField] SaveSlot[] slots;
 
-    SaveSlot[] slots =
+    public SaveManifest()
     {
-        new SaveSlot { slotID = 1 },
-        new SaveSlot { slotID = 2 },
-        new SaveSlot { slotID = 3 },
-        new SaveSlot { slotID = 4 },
-        new SaveSlot { slotID = 5 }
-    };
+        // Create empty slots with default values
+        slots = new SaveSlot[5];
+        for (int i = 0; i < slots.Length; i++) slots[i] = new SaveSlot();
+    }
 
+    public void ActivateSaveSlot_empty(int slotNo, SaveData sd)
+    {
+        SetActiveSlot(slotNo);
+        
+        SaveSlot curr = GetActiveSlot();
+        curr.MarkNotEmpty();
+        curr.Capture_SaveFilePath(sd);
+        curr.Set_LevelData("Lesson 1");
+        curr.Capture_WhenLastUsed();
+    }
+
+    public void ActivateSaveSlot_occupied(int slotNo)
+    {
+        SetActiveSlot(slotNo);
+
+        SaveSlot curr = GetActiveSlot();
+        curr.Capture_WhenLastUsed();
+    }
+
+    public void ClearSaveSlot(int slotNo)
+    {
+        // Grab a reference to the slot
+        SaveSlot curr = slots[slotNo-1];
+
+        // Delete the save file
+        SavePaths p = SaveManager.Instance.paths;
+        p.DeleteSaveFile(curr.Get_FilePath());
+
+        // Clear the slot
+        curr.MakeEmpty();
+    }
+
+    public void SetActiveSlot(int slotNo) { lastSlotUsed = slotNo - 1; }
+
+    public SaveSlot GetActiveSlot() { return slots[lastSlotUsed]; }
+
+    public bool SlotIsEmpty(int slotNo) { return slots[slotNo-1].isEmpty; }
 }
