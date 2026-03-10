@@ -4,7 +4,14 @@ using UnityEngine;
 
 public class SavePaths
 {
-    readonly SaveDebug d = new SaveDebug("<color=#26A69A>[SavePaths] </color>");
+
+    [NonSerialized] SaveDebug d;
+    SaveDebug D()
+    {
+        if (d == null)
+            d = new SaveDebug("<color=#26A69A>[SavePaths] </color>");
+        return d;
+    }
     
     public string progPath = "";
     public string saveRootPath = "";
@@ -34,29 +41,29 @@ public class SavePaths
     // Creates the saveFiles folder, if it does not exist
     public void EnsureSaveFolderExists()
     {
-        d.Log("Searching for save file directory");
+        D().Log("Searching for save file directory");
 
         // Do nothing if the directory already exists
         if (Directory.Exists(saveFilesPath)) 
-            { d.Success("Save file directory FOUND."); return; }
+            { D().Success("Save file directory FOUND."); return; }
         
         // Otherwise, generate all necessary directories
-        d.Warn("Save file directory NOT FOUND.");
-        d.Log($"CREATING {saveFilesPath}");
+        D().Warn("Save file directory NOT FOUND.");
+        D().Log($"CREATING {saveFilesPath}");
         Directory.CreateDirectory(saveFilesPath);
     }
 
     public void EnsureManifestFileExists()
     {
-        d.Log("Searching for save manifest file");
+        D().Log("Searching for save manifest file");
         
         // Do nothing if the file already exists
         if (File.Exists(manFilePath)) 
-            { d.Success($"{manFilePath} FOUND"); return; }
+            { D().Success($"{manFilePath} FOUND"); return; }
 
         // Otherwise, generate file and all necessary directories
-        d.Warn("save manifest file NOT FOUND.");
-        d.Log($"CREATING {manFilePath}");
+        D().Warn("save manifest file NOT FOUND.");
+        D().Log($"CREATING {manFilePath}");
 
         // Get the default JSON data
         SaveManifest emptyMan = new SaveManifest();
@@ -65,5 +72,18 @@ public class SavePaths
         
         // Populate the empty file with default data
         File.WriteAllText(manFilePath, emptyMan_serial);
+    }
+
+    public void DeleteSaveFile(string path)
+    {
+        D().Log($"Searching for {path}");
+        
+        // Do nothing if the file doesn't exist
+        if (!File.Exists(path))
+            { D().Error("File NOT FOUND. Nothing deleted"); return; }
+        
+        // Otherwise, delete the file
+        File.Delete(path);
+        D().Success("File DELETED");
     }
 }

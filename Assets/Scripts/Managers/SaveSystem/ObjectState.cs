@@ -4,9 +4,13 @@ using UnityEngine;
 [Serializable]
 public class ObjectState
 {
-    [NonSerialized]
-    readonly SaveDebug d = 
-        new SaveDebug("<color=#039BE5>[ObjectState] </color>");
+    [NonSerialized] SaveDebug d;
+    SaveDebug D()
+    {
+        if (d == null)
+            d = new SaveDebug("<color=#039BE5>[ObjectState] </color>");
+        return d;
+    }
     
     public ComponentTypes.Types type;
     public int index;
@@ -27,12 +31,13 @@ public class ObjectState
     // For serializing
     public void Capture_ObjectState(ComponentID cID)
     {
-        d.Log($"CAPTURING component {cID.id} state");
         if (cID == null) 
         {
-            d.Error($"CAPTURE STATE FAILED--no ComponentID");
+            D().Error($"CAPTURE STATE FAILED--no ComponentID");
             return;
         }
+
+        D().Log($"CAPTURING component {cID.id} state");
         
         GameObject go = cID.gameObject;
 
@@ -54,18 +59,19 @@ public class ObjectState
     // For deserializing
     public void Apply_ObjectState(ComponentID cID)
     {
-        d.Log($"APPLYING saved state to component {cID.id}");
         if (cID == null) 
         {
-            d.Error($"APPLY STATE FAILED--no ComponentID");
+            D().Error($"APPLY STATE FAILED--no ComponentID");
             return;
         }
+
+        D().Log($"APPLYING saved state to component {cID.id}");
 
         // Split because only the fields need to be applied on Load()
         Apply_Transform(cID);
         Apply_Fields(cID);
 
-        d.Success($"{cID.id} state APPLIED");
+        D().Success($"{cID.id} state APPLIED");
     }
 
     void Apply_Transform(Component cID)

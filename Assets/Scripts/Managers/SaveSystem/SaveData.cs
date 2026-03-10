@@ -6,7 +6,13 @@ using UnityEngine;
 public class SaveData : ISerializationCallbackReceiver
 {
     [NonSerialized]
-    readonly SaveDebug d = new SaveDebug("<color=#1565C0>[SaveData] </color>");
+    SaveDebug d;
+    SaveDebug D()
+    {
+        if (d == null)
+            d = new SaveDebug("<color=#1565C0>[SaveData] </color>");
+        return d;
+    }
     
     public Guid saveID = Guid.NewGuid();
     public Dictionary<Guid, ObjectState> objectStates = 
@@ -26,7 +32,7 @@ public class SaveData : ISerializationCallbackReceiver
     // SaveData -> serializable
     public void OnBeforeSerialize()
     {
-        d.Log("OnBeforeSerialize firing");
+        D().Log("OnBeforeSerialize firing");
 
         states_serial.Clear();
         foreach (var kvp in objectStates)
@@ -36,13 +42,13 @@ public class SaveData : ISerializationCallbackReceiver
             );
         }
 
-        d.Success($"SERIALIZED {states_serial.Count} objects");
+        D().Success($"SERIALIZED {states_serial.Count} objects");
     }
 
     // Serializable -> SaveData
     public void OnAfterDeserialize()
     {
-        d.Log("OnAfterDeserialize firing");
+        D().Log("OnAfterDeserialize firing");
 
         objectStates.Clear();
         foreach (var s in states_serial)
@@ -50,6 +56,6 @@ public class SaveData : ISerializationCallbackReceiver
             objectStates.Add( Guid.Parse(s.id), s.state );
         }
 
-        d.Success($"DESERIALIZED {objectStates.Count} objects");
+        D().Success($"DESERIALIZED {objectStates.Count} objects");
     }
 }
