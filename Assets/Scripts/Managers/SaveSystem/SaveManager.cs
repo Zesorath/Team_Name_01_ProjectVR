@@ -4,47 +4,72 @@ using System.Runtime.CompilerServices;
 using System;
 using System.IO;
 using System.Linq;
+using Unity.XR.Management.AndroidManifest.Editor;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 public class SaveManager
 {
+    readonly SaveDebug d = 
+        new SaveDebug("<color=#29B6F6>[SaveManager] </color>");
+    
     public static SaveManager Instance { get; } = new SaveManager();
+    public SaveManifest man;
     public readonly ComponentTypes types;
     public readonly SavePaths paths;
-    public SaveManifest man;
     public bool isLoadingOrSaving = false;
-
+    bool isInitialized = false;
+    
     SaveData saveData;
     public Dictionary<Guid, ComponentID> cIDs;
-    
+
     SaveManager()
     {
+        man = new SaveManifest();
         types = new ComponentTypes();
         paths = new SavePaths();
-        man = new SaveManifest();
-
         saveData = new SaveData();
         cIDs = new Dictionary<Guid, ComponentID>();
+    }
+
+    // Load the save manifest into memory
+    public void Init()
+    {
+        if (isInitialized == true) return;
+        // Retrieve save manifest JSON from file
+        paths.EnsureSaveFolderExists();
+        paths.EnsureManifestFileExists();
+        string man_serial = ReadJsonFromFile(paths.manFilePath);
+        if (man_serial == "")
+        {
+            d.Error("MANIFEST LOAD FAILED. Terminating program.");
+            GameManager.ExitGame();
+        }
+
+        // Deserialize to the man object
+        JsonUtility.FromJsonOverwrite(man_serial, man);
+        
+        // Mark as initialized
+        isInitialized = true;
     }
 
     // Called by ComponentID to register spawned components with save manager
     public void Register(ComponentID cID)
     {
-        Log($"REGISTERING component {cID.id}");
+        d.Log($"REGISTERING component {cID.id}");
         
         // Registration failure
         string errMsg = $"FAILED TO REGISTER {cID.id}--";
         if (cID.id == Guid.Empty) 
-            { Error($"{errMsg}ID generation failed"); return; }
+            { d.Error($"{errMsg}ID generation failed"); return; }
         if (cIDs.ContainsKey(cID.id)) 
-            { Error($"{errMsg}Duplicate ID"); return; }
+            { d.Error($"{errMsg}Duplicate ID"); return; }
 
         // Register component
         cIDs.Add(cID.id, cID);
         if (!saveData.objectStates.ContainsKey(cID.id))
             saveData.objectStates.Add(cID.id, new ObjectState(cID));
         
-        Success($"Component {cID.id} REGISTERED");
+        d.Success($"Component {cID.id} REGISTERED");
     }
 
     // TODO: Make this accept only the Guid, since we have the cIDs dictionary
@@ -53,27 +78,27 @@ public class SaveManager
     {
         // ComponentID not found
         if (cID == null) 
-            { Error($"UNREGISTER FAILED--NOT FOUND"); return; }
+            { d.Error($"UNREGISTER FAILED--NOT FOUND"); return; }
         
-        Log($"UNREGISTERING component {cID.id}");
+        d.Log($"UNREGISTERING component {cID.id}");
 
         // Unregister component
         cIDs.Remove(cID.id);
         saveData.objectStates.Remove(cID.id);
 
-        Success($"Component {cID.id} UNREGISTERED");
+        d.Success($"Component {cID.id} UNREGISTERED");
     }
     
     public void QuickSave() { Save(); }
     public void SaveToSlot(int slotNo)
     {
-        Log($"STUB: Saving to slot {slotNo}");
+        d.Log($"STUB: Saving to slot {slotNo}");
     }
 
     // Saves the current scene state to file
     public void Save()
     {       
-        Log("Save() CALLED");
+        d.Log("Save() CALLED");
 
         // TODO: FINISH
         // Disable interactions while actively saving/loading (currently stub)
@@ -82,31 +107,12 @@ public class SaveManager
         // Capture current state of all registered scene objects
         foreach (ComponentID cID in cIDs.Values)
             { saveData.objectStates[cID.id].Capture_ObjectState(cID); }
-        
-        // Create the saveFiles folder, if it does not exist
-        string sfp = paths.saveFilesPath;
-        Log($"Searching for save directory {sfp}");
-        if (Directory.Exists(sfp)) 
-            { Success($"{sfp} FOUND. Saving"); }
-        else
-        {
-            Warn($"{sfp} NOT FOUND. Creating");
-            Directory.CreateDirectory(sfp);
-        }
 
-        // Serialize and write to file
+        // Serialize and write to most recent file
         man.lastSave = $"{saveData.saveID}.json";
-        string sfPath = Path.Combine(sfp, man.lastSave);
-        try
-        {
-            using (StreamWriter sw = new StreamWriter(sfPath, append: false))
-            {
-                sw.WriteLine(JsonUtility.ToJson(saveData, prettyPrint: true));
-            }
-            Success($"SAVED to {sfPath}");
-        }
-        catch (Exception e)
-            { Error($"SAVE FAILED--{e.Message}"); }
+        string sfPath = Path.Combine(paths.saveFilesPath, man.lastSave);
+        string saveData_serial = JsonUtility.ToJson(saveData, prettyPrint:true);
+        WriteJsonToFile(sfPath, saveData_serial);
         
         // TODO: FINISH
         // Re-enable interactions
@@ -116,7 +122,7 @@ public class SaveManager
     public void QuickLoad() { Load(man.lastSave); }
     public void LoadFromSlot(int slotNo)
     {
-        Log($"STUB: Loading from slot {slotNo}");
+        d.Log($"STUB: Loading from slot {slotNo}");
     }
 
     // Load a saved scene from the save file. Compares current registered
@@ -124,25 +130,23 @@ public class SaveManager
     // objects to update, delete, or spawn.
     public void Load(string saveFileName) 
     {
-        Log("Load() CALLED");
+        d.Log("Load() CALLED");
 
         // TODO: FINISH
         // Disable interactions while actively saving/loading (currently stub)
         isLoadingOrSaving = true;
 
-        // Deserialize saveData from the file
+        // Retrieve saveData JSON string from the file
         string sfPath = Path.Combine(paths.saveFilesPath, saveFileName);
-        try
-        {
-            JsonUtility.FromJsonOverwrite(File.ReadAllText(sfPath), saveData);
-            Success($"LOADED from {sfPath}");
-        }
-        catch (Exception e)
-            { Error($"LOAD FAILED--{e.Message}"); return; }
+        string saveData_serial = ReadJsonFromFile(sfPath);
+        if (saveData_serial == "") { d.Error("LOAD FAILED"); return; }
+        
+        // Deserialize to the saveData object
+        JsonUtility.FromJsonOverwrite(saveData_serial, saveData);
         
         // PRUNE: Delete objects in the current scene and not in the save file
         int expectDelCt = Math.Max(0, cIDs.Count - saveData.objectStates.Count);
-        Log($"PRUNE expected to delete {expectDelCt}");
+        d.Log($"PRUNE expected to delete {expectDelCt}");
         
         int dCt = 0;
         Guid[] liveIDs = cIDs.Keys.ToArray();
@@ -150,7 +154,7 @@ public class SaveManager
         {           
             if (!saveData.objectStates.ContainsKey(id))
             {
-                Log($"PRUNE deleting {id}");
+                d.Log($"PRUNE deleting {id}");
                 cIDs[id].Delete();
                 dCt++;
             }
@@ -164,7 +168,7 @@ public class SaveManager
         // TODO: Finish
         // SPAWN objects in the save file but not the current scene
         int expectSpnCt = Math.Max(0, saveData.objectStates.Count - cIDs.Count);
-        Log($"SPAWN expected to spawn {expectSpnCt}");
+        d.Log($"SPAWN expected to spawn {expectSpnCt}");
 
         int sCt = 0;
         foreach (Guid id in saveData.objectStates.Keys)
@@ -172,7 +176,7 @@ public class SaveManager
             
             if (cIDs.ContainsKey(id)) { continue; }
 
-            Log($"SPAWN creating {id}");
+            d.Log($"SPAWN creating {id}");
 
             ObjectState state = saveData.objectStates[id];
             GameObject prefab = ResolvePrefab(state.type);
@@ -186,7 +190,7 @@ public class SaveManager
             if (cID == null)
             {
                 string msg = $"Prefab {prefab.name} missing ComponentID";
-                Error($"SPAWN failed--{msg}");
+                d.Error($"SPAWN failed--{msg}");
                 UnityEngine.Object.Destroy(go);
                 continue;
             }
@@ -209,11 +213,38 @@ public class SaveManager
         types.RestoreTypeCounters(saveData);
         
         // Display successful load stats
-        Log($"UPDATED: {uCt} ; DELETED: {dCt} ; SPAWNED: {sCt}");
+        d.Log($"UPDATED: {uCt} ; DELETED: {dCt} ; SPAWNED: {sCt}");
 
         // TODO: FINISH
         // Re-enable interactions
         isLoadingOrSaving = false;
+    }
+
+    // HELPERS
+
+    void WriteJsonToFile(string path, string jsonData)
+    {
+        try
+        {
+            File.WriteAllText(path, jsonData);
+            d.Success($"WROTE to {path}");
+        }
+        catch (Exception e)
+            { d.Error($"WRITE FAILED--{e.Message}"); }
+    }
+
+    string ReadJsonFromFile(string path)
+    {
+        string jsonData = "";
+        try
+        {
+            jsonData = File.ReadAllText(path);
+            d.Success($"READ from {path}");
+        }
+        catch (Exception e)
+            { d.Error($"READ FAILED--{e.Message}"); }
+        
+        return jsonData;
     }
 
     // Get the necessary prefab for spawn-from-file
@@ -225,21 +256,9 @@ public class SaveManager
         if (prefab == null)
         {
             string pfPath = $"Resources/Components/{key}.prefab";
-            Error($"No prefab found at {pfPath}");
+            d.Error($"No prefab found at {pfPath}");
         }
 
         return prefab;
     }
-
-    // Debug output
-    public static string sysSplash = "<color=#FFFFFF>[SaveSystem]</color>";
-    string splash = $"<color=#29B6F6>[SaveManager] </color>";
-
-    void Log(string msg) { Debug.Log($"{sysSplash}{splash}{msg}"); }
-    void Success(string msg) 
-        { Debug.Log($"{sysSplash}{splash}<color=green>{msg}</color>"); }
-    void Warn(string msg) 
-        { Debug.LogWarning($"{sysSplash}{splash}<color=yellow>{msg}</color>"); }
-    void Error(string msg) 
-        { Debug.LogError($"{sysSplash}{splash}<color=#B71C1C>{msg}</color>"); }
 }
