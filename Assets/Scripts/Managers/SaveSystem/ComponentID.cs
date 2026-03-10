@@ -6,6 +6,9 @@ using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public class ComponentID : MonoBehaviour
 {
+    readonly SaveDebug d = 
+        new SaveDebug("<color=#64B5F6>[ComponentID] </color>");
+    
     // ID FIELDS AND FUNCTIONS
     public Guid id;
     public string label = "";
@@ -23,13 +26,13 @@ public class ComponentID : MonoBehaviour
         // Error states--abort initialization
         string errMsg = "Init() FAILURE--";
         if (SaveManager.Instance == null)
-            { Error($"{errMsg}No SaveManager instance"); return; }
+            { d.Error($"{errMsg}No SaveManager instance"); return; }
 
         GenerateLabelSuggestion();
-        if (label == "") { Error($"{errMsg}No label generated"); return; }
+        if (label == "") { d.Error($"{errMsg}No label generated"); return; }
 
         // Initialization succeeded--register component
-        Success($"INITIALIZED--ID = {id}, label = {label}");
+        d.Success($"INITIALIZED--ID = {id}, label = {label}");
         SaveManager.Instance.Register(this);
         registered = true;
     }
@@ -51,14 +54,14 @@ public class ComponentID : MonoBehaviour
         
         // Label generation failure
         if (type == ComponentTypes.Types.DEFAULT)
-            { Error($"{errMsg}Component type not specified"); return; }
+            { d.Error($"{errMsg}Component type not specified"); return; }
         
         index = SaveManager.Instance.types.GetNextTypeIndex(type);
-        if (index == 0) { Error($"{errMsg}Index not found"); return; }
+        if (index == 0) { d.Error($"{errMsg}Index not found"); return; }
 
         // Found both parts--generate label
         label = $"{type}_{index}";
-        Success($"GENERATED LABEL {label} for component {id}");
+        d.Success($"GENERATED LABEL {label} for component {id}");
     }
 
     // Used to flip registered bool for Register() when spawning from save file
@@ -88,7 +91,7 @@ public class ComponentID : MonoBehaviour
         // Grab a reference to the XR component
         grab = GetComponent<XRGrabInteractable>();
         if (grab == null) 
-            { Error($"{gameObject.name} missing XRGrabInteractable"); return; }
+            { d.Error($"{gameObject.name} missing XRGrabInteractable"); return; }
 
         // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
@@ -138,17 +141,5 @@ public class ComponentID : MonoBehaviour
     }
 
     // Just announce when the ComponentID object is destroyed
-    public void OnDestroy() { Log($"DESTROYED {id}"); }
-
-    // Debug output
-    string splash = 
-        $"{SaveManager.sysSplash}<color=#64B5F6>[ComponentID] </color>";
-
-    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
-    void Success(string msg) 
-        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
-    void Warn(string msg) 
-        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
-    void Error(string msg) 
-        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
+    public void OnDestroy() { d.Log($"DESTROYED {id}"); }
 }

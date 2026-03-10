@@ -5,6 +5,9 @@ using UnityEngine;
 [Serializable]
 public class SaveData : ISerializationCallbackReceiver
 {
+    [NonSerialized]
+    readonly SaveDebug d = new SaveDebug("<color=#1565C0>[SaveData] </color>");
+    
     public Guid saveID = Guid.NewGuid();
     public Dictionary<Guid, ObjectState> objectStates = 
         new Dictionary<Guid, ObjectState>();
@@ -23,7 +26,7 @@ public class SaveData : ISerializationCallbackReceiver
     // SaveData -> serializable
     public void OnBeforeSerialize()
     {
-        Log("OnBeforeSerialize firing");
+        d.Log("OnBeforeSerialize firing");
 
         states_serial.Clear();
         foreach (var kvp in objectStates)
@@ -33,13 +36,13 @@ public class SaveData : ISerializationCallbackReceiver
             );
         }
 
-        Success($"SERIALIZED {states_serial.Count} objects");
+        d.Success($"SERIALIZED {states_serial.Count} objects");
     }
 
     // Serializable -> SaveData
     public void OnAfterDeserialize()
     {
-        Log("OnAfterDeserialize firing");
+        d.Log("OnAfterDeserialize firing");
 
         objectStates.Clear();
         foreach (var s in states_serial)
@@ -47,18 +50,6 @@ public class SaveData : ISerializationCallbackReceiver
             objectStates.Add( Guid.Parse(s.id), s.state );
         }
 
-        Success($"DESERIALIZED {objectStates.Count} objects");
+        d.Success($"DESERIALIZED {objectStates.Count} objects");
     }
-
-    // Debug output
-    string splash = 
-        $"{SaveManager.sysSplash}<color=#1565C0>[SaveData] </color>";
-
-    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
-    void Success(string msg) 
-        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
-    void Warn(string msg) 
-        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
-    void Error(string msg) 
-        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }

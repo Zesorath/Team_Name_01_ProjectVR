@@ -4,6 +4,10 @@ using UnityEngine;
 [Serializable]
 public class ObjectState
 {
+    [NonSerialized]
+    readonly SaveDebug d = 
+        new SaveDebug("<color=#039BE5>[ObjectState] </color>");
+    
     public ComponentTypes.Types type;
     public int index;
     public string label;
@@ -23,10 +27,10 @@ public class ObjectState
     // For serializing
     public void Capture_ObjectState(ComponentID cID)
     {
-        Log($"CAPTURING component {cID.id} state");
+        d.Log($"CAPTURING component {cID.id} state");
         if (cID == null) 
         {
-            Error($"CAPTURE STATE FAILED--no ComponentID");
+            d.Error($"CAPTURE STATE FAILED--no ComponentID");
             return;
         }
         
@@ -44,16 +48,16 @@ public class ObjectState
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { ledVoltage = led.CurrentVoltage; }
 
-        Success($"{cID.id} state CAPTURED");
+        d.Success($"{cID.id} state CAPTURED");
     }
 
     // For deserializing
     public void Apply_ObjectState(ComponentID cID)
     {
-        Log($"APPLYING saved state to component {cID.id}");
+        d.Log($"APPLYING saved state to component {cID.id}");
         if (cID == null) 
         {
-            Error($"APPLY STATE FAILED--no ComponentID");
+            d.Error($"APPLY STATE FAILED--no ComponentID");
             return;
         }
 
@@ -61,7 +65,7 @@ public class ObjectState
         Apply_Transform(cID);
         Apply_Fields(cID);
 
-        Success($"{cID.id} state APPLIED");
+        d.Success($"{cID.id} state APPLIED");
     }
 
     void Apply_Transform(Component cID)
@@ -85,16 +89,4 @@ public class ObjectState
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { led.CurrentVoltage = ledVoltage; }
     }
-
-    // Debug output
-    string splash = 
-        $"{SaveManager.sysSplash}<color=#039BE5>[ObjectState] </color>";
-
-    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
-    void Success(string msg) 
-        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
-    void Warn(string msg) 
-        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
-    void Error(string msg) 
-        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }
