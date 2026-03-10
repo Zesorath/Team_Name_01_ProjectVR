@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq;
 using Unity.XR.Management.AndroidManifest.Editor;
+using UnityEngine.SceneManagement;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
 public class SaveManager
@@ -19,6 +20,7 @@ public class SaveManager
     public bool isLoadingOrSaving = false;
     bool isInitialized = false;
     
+    SaveSlot activeSlot;
     SaveData saveData;
     public Dictionary<Guid, ComponentID> cIDs;
 
@@ -89,14 +91,49 @@ public class SaveManager
         d.Success($"Component {cID.id} UNREGISTERED");
     }
     
-    public void QuickSave() { Save(); }
+    // SAVE
+
+    public void QuickSave()
+    { 
+        d.Log("QuickSave() CALLED");
+        
+        // Account for level completion after last save.
+        string currentLevel = SceneManager.GetActiveScene().name;
+        if (currentLevel != activeSlot.Get_LevelData())
+        {
+            activeSlot.Set_LevelData(currentLevel);
+        }
+        
+        // Grab the timestamp
+        activeSlot.Capture_WhenLastUsed();
+
+        // Re-serialize the manifest
+        string man_serial = JsonUtility.ToJson(man, prettyPrint: true);
+        WriteJsonToFile(paths.manFilePath, man_serial);
+
+        // Then save
+        Save(activeSlot.Get_FilePath());
+    }
+
     public void SaveToSlot(int slotNo)
     {
-        d.Log($"STUB: Saving to slot {slotNo}");
+        d.Log($"CREATING NEW SAVE FILE in slot {slotNo}");
+        man.ActivateSaveSlot_empty(slotNo, saveData);
+
+        // Serialize manifest and save to file
+        string man_serial = JsonUtility.ToJson(man, prettyPrint: true);
+        WriteJsonToFile(paths.manFilePath, man_serial);
+
+        // Grab a reference to the current slot for convenience
+        activeSlot = man.GetActiveSlot();
+
+        // Enter level 1, create save file, and populate with level start state
+        SceneManager.LoadScene(activeSlot.Get_LevelData());
+        Save(activeSlot.Get_FilePath());
     }
 
     // Saves the current scene state to file
-    public void Save()
+    void Save(string path)
     {       
         d.Log("Save() CALLED");
 
@@ -109,26 +146,50 @@ public class SaveManager
             { saveData.objectStates[cID.id].Capture_ObjectState(cID); }
 
         // Serialize and write to most recent file
-        man.lastSave = $"{saveData.saveID}.json";
-        string sfPath = Path.Combine(paths.saveFilesPath, man.lastSave);
         string saveData_serial = JsonUtility.ToJson(saveData, prettyPrint:true);
-        WriteJsonToFile(sfPath, saveData_serial);
+        WriteJsonToFile(path, saveData_serial);
         
         // TODO: FINISH
         // Re-enable interactions
         isLoadingOrSaving = false;
     }
 
-    public void QuickLoad() { Load(man.lastSave); }
+    // LOAD
+
+    string pendingLoadPath = null;
+
+    public void QuickLoad() 
+    {
+        d.Log("QuickLoad() CALLED");
+        Load(activeSlot.Get_FilePath());
+    }
+
     public void LoadFromSlot(int slotNo)
     {
-        d.Log($"STUB: Loading from slot {slotNo}");
+        d.Log($"LOADING SAVE FILE from slot {slotNo}");
+        man.ActivateSaveSlot_occupied(slotNo);
+
+        // Grab reference to current save slot
+        activeSlot = man.GetActiveSlot();
+        pendingLoadPath = activeSlot.Get_FilePath();
+
+        // Enter the level; wait for scene to finish loading before loading save
+        SceneManager.sceneLoaded += OnSceneLoaded;
+        SceneManager.LoadScene(activeSlot.Get_LevelData());
+    }
+
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        Load(pendingLoadPath);
+        pendingLoadPath = null;
     }
 
     // Load a saved scene from the save file. Compares current registered
     // ComponentIDs in cIDs with the de-serialized saveData to determine which
     // objects to update, delete, or spawn.
-    public void Load(string saveFileName) 
+    void Load(string path) 
     {
         d.Log("Load() CALLED");
 
@@ -137,8 +198,7 @@ public class SaveManager
         isLoadingOrSaving = true;
 
         // Retrieve saveData JSON string from the file
-        string sfPath = Path.Combine(paths.saveFilesPath, saveFileName);
-        string saveData_serial = ReadJsonFromFile(sfPath);
+        string saveData_serial = ReadJsonFromFile(path);
         if (saveData_serial == "") { d.Error("LOAD FAILED"); return; }
         
         // Deserialize to the saveData object
@@ -165,7 +225,6 @@ public class SaveManager
         foreach (Guid id in cIDs.Keys)
             { saveData.objectStates[id].Apply_ObjectState(cIDs[id]); uCt++; }
 
-        // TODO: Finish
         // SPAWN objects in the save file but not the current scene
         int expectSpnCt = Math.Max(0, saveData.objectStates.Count - cIDs.Count);
         d.Log($"SPAWN expected to spawn {expectSpnCt}");
