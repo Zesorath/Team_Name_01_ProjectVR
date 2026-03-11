@@ -23,17 +23,15 @@ public class LED_Component : CircuitComponentBase
             ledRenderer = GetComponentInChildren<Renderer>();
     }
 
-    public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
+    public override void AddToSpice(SpiceSharp.Circuit ckt, string pos, string neg)
     {
+        // Temporary gameplay model: treat LED as resistor until diode model is added
         float fakeResistance = 1000f;
-        // Example: treat LED as a test resistor for now
-        string rName = $"R_{componentId}_LED";
-        ckt.Add(new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, fakeResistance));
 
-        Debug.Log($"[LED] Adding TEST resistor for LED between {nodeA} and {nodeB}");
+        Debug.Log($"[LED] Adding TEST resistor for LED between {pos} and {neg}");
+        ckt.Add(new SpiceSharp.Components.Resistor(componentId + "_R", pos, neg, fakeResistance));
     }
 
-   
     public void UpdateLEDState(float voltageDrop)
     {
         currentVoltage = voltageDrop;

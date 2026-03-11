@@ -7,10 +7,14 @@ public class Ohms : CircuitComponentBase
     [Header("Resistor")]
     public float resistance = 2000f;
 
-    public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
+    public override void AddToSpice(Circuit ckt, string nodeA, string nodeB)
     {
-        string rName = $"R_{componentId}";
-        ckt.Add(new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, resistance));
+        // Use GameObject name as resistor name
+        string rName = gameObject.name;
+
+        var r = new Resistor(rName, nodeA, nodeB, resistance);
+        ckt.Add(r);
+
         Debug.Log($"[Resistor] {rName} => {nodeA} to {nodeB}, {resistance}Ω");
     }
 }
