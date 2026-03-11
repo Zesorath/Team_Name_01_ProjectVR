@@ -70,7 +70,8 @@ public class SavePaths
         string emptyMan_serial = 
             JsonUtility.ToJson(emptyMan, prettyPrint: true);
         
-        // Populate the empty file with default data
+        // Create the empty file and populate with default data
+        EnsureSaveFolderExists();
         File.WriteAllText(manFilePath, emptyMan_serial);
     }
 

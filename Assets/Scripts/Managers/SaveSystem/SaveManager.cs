@@ -38,7 +38,6 @@ public class SaveManager
     {
         if (isInitialized == true) return;
         // Retrieve save manifest JSON from file
-        paths.EnsureSaveFolderExists();
         paths.EnsureManifestFileExists();
         string man_serial = ReadJsonFromFile(paths.manFilePath);
         if (man_serial == "")
@@ -70,6 +69,7 @@ public class SaveManager
         cIDs.Add(cID.id, cID);
         if (!saveData.objectStates.ContainsKey(cID.id))
             saveData.objectStates.Add(cID.id, new ObjectState(cID));
+        cID.MarkRegistered();
         
         d.Success($"Component {cID.id} REGISTERED");
     }
@@ -98,6 +98,7 @@ public class SaveManager
         d.Log("QuickSave() CALLED");
         
         // Account for level completion after last save.
+        // TODO: Add SaveData reset
         string currentLevel = SceneManager.GetActiveScene().name;
         if (currentLevel != activeSlot.Get_LevelData())
         {
@@ -147,6 +148,7 @@ public class SaveManager
 
         // Serialize and write to most recent file
         string saveData_serial = JsonUtility.ToJson(saveData, prettyPrint:true);
+        paths.EnsureSaveFolderExists();
         WriteJsonToFile(path, saveData_serial);
         
         // TODO: FINISH
@@ -156,13 +158,13 @@ public class SaveManager
 
     // LOAD
 
-    string pendingLoadPath = null;
-
     public void QuickLoad() 
     {
         d.Log("QuickLoad() CALLED");
         Load(activeSlot.Get_FilePath());
     }
+
+    string pendingLoadPath = null;
 
     public void LoadFromSlot(int slotNo)
     {
@@ -178,6 +180,7 @@ public class SaveManager
         SceneManager.LoadScene(activeSlot.Get_LevelData());
     }
 
+    // Listener waits for scene to finish loading
     void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         SceneManager.sceneLoaded -= OnSceneLoaded;
@@ -186,100 +189,154 @@ public class SaveManager
         pendingLoadPath = null;
     }
 
-    // Load a saved scene from the save file. Compares current registered
-    // ComponentIDs in cIDs with the de-serialized saveData to determine which
-    // objects to update, delete, or spawn.
-    void Load(string path) 
+    struct LoadPlan
+    {
+        public HashSet<Guid> deleteIDs;
+        public HashSet<Guid> updateIDs;
+        public HashSet<Guid> spawnIDs;
+    }
+
+    void Load(string path)
     {
         d.Log("Load() CALLED");
-
-        // TODO: FINISH
-        // Disable interactions while actively saving/loading (currently stub)
         isLoadingOrSaving = true;
 
-        // Retrieve saveData JSON string from the file
+        // Re-populate saveData from the save file
         string saveData_serial = ReadJsonFromFile(path);
         if (saveData_serial == "") { d.Error("LOAD FAILED"); return; }
-        
-        // Deserialize to the saveData object
         JsonUtility.FromJsonOverwrite(saveData_serial, saveData);
+
+        // Sort by delete/update/spawn
+        LoadPlan plan = BuildLoadPlan();
         
-        // PRUNE: Delete objects in the current scene and not in the save file
-        int expectDelCt = Math.Max(0, cIDs.Count - saveData.objectStates.Count);
-        d.Log($"PRUNE expected to delete {expectDelCt}");
-        
-        int dCt = 0;
-        Guid[] liveIDs = cIDs.Keys.ToArray();
-        foreach (Guid id in liveIDs)
-        {           
-            if (!saveData.objectStates.ContainsKey(id))
-            {
-                d.Log($"PRUNE deleting {id}");
-                cIDs[id].Delete();
-                dCt++;
-            }
-        }
+        // Perform and count deletes/updates/spawns
+        int dCt = Load_delete(plan.deleteIDs);
+        int uCt = Load_update(plan.updateIDs);
+        int sCt = Load_spawn(plan.spawnIDs);
 
-        // UPDATE objects that are in both current scene and save file
-        int uCt = 0;
-        foreach (Guid id in cIDs.Keys)
-            { saveData.objectStates[id].Apply_ObjectState(cIDs[id]); uCt++; }
-
-        // SPAWN objects in the save file but not the current scene
-        int expectSpnCt = Math.Max(0, saveData.objectStates.Count - cIDs.Count);
-        d.Log($"SPAWN expected to spawn {expectSpnCt}");
-
-        int sCt = 0;
-        foreach (Guid id in saveData.objectStates.Keys)
-        {
-            
-            if (cIDs.ContainsKey(id)) { continue; }
-
-            d.Log($"SPAWN creating {id}");
-
-            ObjectState state = saveData.objectStates[id];
-            GameObject prefab = ResolvePrefab(state.type);
-            if (prefab == null) continue;
-
-            GameObject go = UnityEngine.Object.Instantiate(
-                prefab, state.position, state.rotation
-            );
-
-            ComponentID cID = go.GetComponent<ComponentID>();
-            if (cID == null)
-            {
-                string msg = $"Prefab {prefab.name} missing ComponentID";
-                d.Error($"SPAWN failed--{msg}");
-                UnityEngine.Object.Destroy(go);
-                continue;
-            }
-
-            // Populate the spawned object. TODO: Rework ComponentID class so
-            // this doesn't all have to be done manually
-            cID.id = id;
-            cID.label = state.label;
-            cID.index = state.index;
-
-            state.Apply_Fields(cID);
-
-            Register(cID);
-            cID.MarkRegistered();
-                
-            sCt++;
-        }
-
-        // Restore type counts from loaded objects
+        // Rebuild type indices from the restored save data
         types.RestoreTypeCounters(saveData);
-        
-        // Display successful load stats
-        d.Log($"UPDATED: {uCt} ; DELETED: {dCt} ; SPAWNED: {sCt}");
-
-        // TODO: FINISH
-        // Re-enable interactions
         isLoadingOrSaving = false;
     }
 
-    // HELPERS
+    // LOAD HELPERS
+
+    // Place IDs into delete/update/spawn buckets
+    LoadPlan BuildLoadPlan()
+    {
+        var liveIDs = cIDs.Keys.ToHashSet();
+        var savedIDs = saveData.objectStates.Keys.ToHashSet();
+
+        LoadPlan p = new LoadPlan
+        {
+            deleteIDs = liveIDs.Except(savedIDs).ToHashSet(),
+            updateIDs = liveIDs.Intersect(savedIDs).ToHashSet(),
+            spawnIDs = savedIDs.Except(liveIDs).ToHashSet()
+        };
+
+        int expD = p.deleteIDs.Count;
+        int expU = p.updateIDs.Count;
+        int expS = p.spawnIDs.Count;
+        d.Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
+
+        return p;
+    }
+
+    // Delete objects that are in the current scene but not in the save file
+    int Load_delete(HashSet<Guid> dIDs)
+    {
+        int dCt = 0;
+
+        foreach (var id in dIDs)
+        {
+            d.Log($"DELETING component {id}");
+            cIDs[id].Delete();
+            dCt++;
+        }
+
+        return dCt; 
+    }
+
+    // Update objects that are present in both the current scene and save file
+    int Load_update(HashSet<Guid> uIDs)
+    {
+        int uCt = 0;
+
+        foreach (var id in uIDs)
+        {
+            d.Log($"UPDATING component {id}");
+            saveData.objectStates[id].Apply_ObjectState(cIDs[id]);
+            uCt++;
+        }
+
+        return uCt;
+    }
+
+    // Spawn objects present in the save file and not in the current scene
+    int Load_spawn(HashSet<Guid> sIDs)
+    {
+        int sCt = 0;
+
+        foreach (var id in sIDs)
+        {
+            d.Log($"SPAWNING component {id}");
+            if (!SpawnAndRegisterObjectFromState(id, saveData.objectStates[id]))
+                continue;
+            sCt++;
+        }
+
+        return sCt;
+    }
+
+    bool SpawnAndRegisterObjectFromState(Guid id, ObjectState state)
+    {
+        // Grab the correct prefab. Error if not found
+        GameObject prefab = ResolvePrefab(state.type);
+        if (prefab == null) return false;
+
+        // Instantiate a new GameObject from the prefab, with the saved object's
+        // transform
+        GameObject go = UnityEngine.Object.Instantiate(
+            prefab, state.position, state.rotation
+        );
+
+        // If no ComponentID found on the object, something has gone wrong. 
+        // Report error and despawn the object.
+        ComponentID cID = go.GetComponent<ComponentID>();
+        if (cID == null)
+        {
+            string errMsg = $"Prefab {prefab.name} missing ComponentID";
+            d.Error($"SPAWN FAILED--{errMsg}");
+            UnityEngine.Object.Destroy(go);
+            return false;
+        }
+
+        // Restore and register ComponentID identification data from saved state
+        cID.id = id;
+        cID.label = state.label;
+        cID.index = state.index;
+        state.Apply_Fields(cID);
+        Register(cID);
+
+        return true;
+    }
+
+    // Get the necessary prefab for spawn-from-file
+    GameObject ResolvePrefab(ComponentTypes.Types type)
+    {
+        string key = type.ToString();
+        GameObject prefab = Resources.Load<GameObject>($"Components/{key}");
+
+        if (prefab == null)
+        {
+            string pfPath = $"Resources/Components/{key}.prefab";
+            d.Error($"No prefab found at {pfPath}");
+        }
+
+        return prefab;
+    }
+
+    // GENERAL HELPERS
 
     void WriteJsonToFile(string path, string jsonData)
     {
@@ -304,20 +361,5 @@ public class SaveManager
             { d.Error($"READ FAILED--{e.Message}"); }
         
         return jsonData;
-    }
-
-    // Get the necessary prefab for spawn-from-file
-    GameObject ResolvePrefab(ComponentTypes.Types type)
-    {
-        string key = type.ToString();
-        GameObject prefab = Resources.Load<GameObject>($"Components/{key}");
-
-        if (prefab == null)
-        {
-            string pfPath = $"Resources/Components/{key}.prefab";
-            d.Error($"No prefab found at {pfPath}");
-        }
-
-        return prefab;
     }
 }
