@@ -74,6 +74,6 @@ public class SwitchComponent : CircuitComponentBase
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
         double r = IsClosed ? 1e-3 : 1e12; // closed ~ short, open ~ almost infinite
-        ckt.Add(new Resistor($"R_{componentId}_SW", nodeA, nodeB, r));
+        ckt.Add(new Resistor($"{componentId}_SW", nodeA, nodeB, r));
     }
 }
