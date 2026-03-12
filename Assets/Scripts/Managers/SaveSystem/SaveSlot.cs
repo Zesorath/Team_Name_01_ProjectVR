@@ -1,4 +1,5 @@
 using System;
+using System.Data.Common;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using UnityEngine;
@@ -17,6 +18,7 @@ public class SaveSlot
 
     public bool isEmpty = true;
     [SerializeField] string filePath = "";
+    [SerializeField] string fileName = "";
     [SerializeField] string level = "";
     public string display = "[EMPTY]";
     [SerializeField] string whenLastUsed = "";
@@ -28,6 +30,7 @@ public class SaveSlot
     {
         isEmpty = true;
         filePath = "";
+        fileName = "";
         level = "";
         display = "[EMPTY]";
         whenLastUsed = "";
@@ -37,9 +40,11 @@ public class SaveSlot
     public void Capture_SaveFilePath(SaveData sd)
     {
         SaveManager sm = SaveManager.Instance;
-        filePath = Path.Combine(sm.paths.saveFilesPath, $"{sd.saveID}.json");
+        fileName = sd.saveID.ToString();
+        filePath = Path.Combine(sm.paths.saveFilesPath, $"{fileName}.json");
     }
 
+    public Guid Get_FileName() { return Guid.Parse(fileName); }
     public string Get_FilePath() { return filePath; }
 
 

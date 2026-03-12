@@ -25,7 +25,11 @@ public class InputManager : MonoBehaviour
     void Update()
     {
         SaveManager sm = SaveManager.Instance;
+        UndoManager um = UndoManager.Instance;
         string splash = "[InputManager]: ";
+
+        bool ctrl = Input.GetKey(KeyCode.LeftControl) 
+            || Input.GetKey(KeyCode.RightControl);
         
         // Save current scene to file
         if (Input.GetKeyDown(KeyCode.F5)) 
@@ -48,5 +52,8 @@ public class InputManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F10)) sm.LoadFromSlot(1);
         if (Input.GetKeyDown(KeyCode.F11)) sm.LoadFromSlot(2);
         if (Input.GetKeyDown(KeyCode.F12)) sm.LoadFromSlot(3);
+
+        if (ctrl && Input.GetKeyDown(KeyCode.Z)) um.Undo();
+        if (ctrl && Input.GetKeyDown(KeyCode.Y)) um.Redo();
     }
 }

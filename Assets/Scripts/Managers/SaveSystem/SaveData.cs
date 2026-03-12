@@ -29,6 +29,22 @@ public class SaveData : ISerializationCallbackReceiver
     // Serializable format for objectStates
     [SerializeField] private List<Entry> states_serial = new List<Entry>();
 
+    public SaveData() {}
+
+    // Returns a deep copy of other
+    public SaveData(SaveData other)
+    {
+        string other_serial = JsonUtility.ToJson(other);
+        JsonUtility.FromJsonOverwrite(other_serial, this);
+    }
+
+    // Empty the current SaveData object
+    public void Reset()
+    {
+        objectStates.Clear();
+        states_serial.Clear();
+    }
+
     // SaveData -> serializable
     public void OnBeforeSerialize()
     {

@@ -10,8 +10,13 @@ using UnityEngine.SceneManagement;
 
 public class SaveManager
 {
-    readonly SaveDebug d = 
-        new SaveDebug("<color=#29B6F6>[SaveManager] </color>");
+    [NonSerialized] SaveDebug d;
+    SaveDebug D()
+    {
+        if (d == null)
+            d = new SaveDebug("<color=#29B6F6>[SaveManager] </color>");
+        return d;
+    }
     
     public static SaveManager Instance { get; } = new SaveManager();
     public SaveManifest man;
@@ -21,7 +26,7 @@ public class SaveManager
     bool isInitialized = false;
     
     SaveSlot activeSlot;
-    SaveData saveData;
+    public SaveData saveData;
     public Dictionary<Guid, ComponentID> cIDs;
 
     SaveManager()
@@ -36,34 +41,76 @@ public class SaveManager
     // Load the save manifest into memory
     public void Init()
     {
-        if (isInitialized == true) return;
+        if (isInitialized) return;
         // Retrieve save manifest JSON from file
         paths.EnsureManifestFileExists();
         string man_serial = ReadJsonFromFile(paths.manFilePath);
         if (man_serial == "")
         {
-            d.Error("MANIFEST LOAD FAILED. Terminating program.");
+            D().Error("MANIFEST LOAD FAILED. Terminating program.");
             GameManager.ExitGame();
         }
 
         // Deserialize to the man object
         JsonUtility.FromJsonOverwrite(man_serial, man);
+
+        // Subscribe to scene change listener
+        SceneManager.activeSceneChanged += OnSceneChanged;
         
         // Mark as initialized
         isInitialized = true;
     }
 
+    void OnSceneChanged(Scene oldScene, Scene newScene)
+    {
+        activeSlot.Set_LevelData(newScene.name);
+        Reset_sameID();
+    }
+
+    // Clear the current SaveManager instance. Re-roll saveID
+    public void Reset_newID()
+    {
+        saveData = new SaveData();
+        ClearRuntimeState();
+    }
+
+    // Clear the current SaveManager instance. Retain saveID
+    public void Reset_sameID()
+    {
+        saveData.Reset();
+        ClearRuntimeState();
+    }
+
+    void ClearRuntimeState()
+    {
+        types.ResetTypeCounters();
+        UndoManager.Instance.Reset();
+        cIDs.Clear();
+    }
+
+    // Refresh the authoritative saveData
+    public void CaptureLiveState()
+    {
+        foreach (var cID in cIDs.Values)
+        {
+            if (!saveData.objectStates.ContainsKey(cID.id))
+                saveData.objectStates.Add(cID.id, new ObjectState(cID));
+            else
+                saveData.objectStates[cID.id].Capture_ObjectState(cID);
+        }
+    }
+
     // Called by ComponentID to register spawned components with save manager
     public void Register(ComponentID cID)
     {
-        d.Log($"REGISTERING component {cID.id}");
+        D().Log($"REGISTERING component {cID.id}");
         
         // Registration failure
         string errMsg = $"FAILED TO REGISTER {cID.id}--";
         if (cID.id == Guid.Empty) 
-            { d.Error($"{errMsg}ID generation failed"); return; }
+            { D().Error($"{errMsg}ID generation failed"); return; }
         if (cIDs.ContainsKey(cID.id)) 
-            { d.Error($"{errMsg}Duplicate ID"); return; }
+            { D().Error($"{errMsg}Duplicate ID"); return; }
 
         // Register component
         cIDs.Add(cID.id, cID);
@@ -71,7 +118,7 @@ public class SaveManager
             saveData.objectStates.Add(cID.id, new ObjectState(cID));
         cID.MarkRegistered();
         
-        d.Success($"Component {cID.id} REGISTERED");
+        D().Success($"Component {cID.id} REGISTERED");
     }
 
     // TODO: Make this accept only the Guid, since we have the cIDs dictionary
@@ -80,30 +127,36 @@ public class SaveManager
     {
         // ComponentID not found
         if (cID == null) 
-            { d.Error($"UNREGISTER FAILED--NOT FOUND"); return; }
+            { D().Error($"UNREGISTER FAILED--NOT FOUND"); return; }
         
-        d.Log($"UNREGISTERING component {cID.id}");
+        D().Log($"UNREGISTERING component {cID.id}");
 
         // Unregister component
         cIDs.Remove(cID.id);
         saveData.objectStates.Remove(cID.id);
 
-        d.Success($"Component {cID.id} UNREGISTERED");
+        D().Success($"Component {cID.id} UNREGISTERED");
     }
     
     // SAVE
+    string pendingAction = null;
+
+    // Listener waits for scene to finish loading, then performs save/load
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        string path = activeSlot.Get_FilePath();
+        if (pendingAction == "save") Save(path);
+        else if (pendingAction == "load") LoadFrom_file(path);
+        else D().Error($"Invalid pendingAction");
+
+        pendingAction = null;
+    }
 
     public void QuickSave()
     { 
-        d.Log("QuickSave() CALLED");
-        
-        // Account for level completion after last save.
-        // TODO: Add SaveData reset
-        string currentLevel = SceneManager.GetActiveScene().name;
-        if (currentLevel != activeSlot.Get_LevelData())
-        {
-            activeSlot.Set_LevelData(currentLevel);
-        }
+        D().Log("QuickSave() CALLED");
         
         // Grab the timestamp
         activeSlot.Capture_WhenLastUsed();
@@ -116,27 +169,36 @@ public class SaveManager
         Save(activeSlot.Get_FilePath());
     }
 
+    // Creates a new save file in the specified save slot
     public void SaveToSlot(int slotNo)
     {
-        d.Log($"CREATING NEW SAVE FILE in slot {slotNo}");
+        D().Log($"CREATING NEW SAVE FILE in slot {slotNo}");
+
+        // Start brand new save file
+        saveData = new SaveData();
+
+        // Initialize slot and set it active, then grab a reference to it
         man.ActivateSaveSlot_empty(slotNo, saveData);
+        activeSlot = man.GetActiveSlot();
 
         // Serialize manifest and save to file
         string man_serial = JsonUtility.ToJson(man, prettyPrint: true);
         WriteJsonToFile(paths.manFilePath, man_serial);
+        
+        // Set up listener for scene to finish loading.
+        pendingAction = "save";
+        SceneManager.sceneLoaded += OnSceneLoaded;
 
-        // Grab a reference to the current slot for convenience
-        activeSlot = man.GetActiveSlot();
-
-        // Enter level 1, create save file, and populate with level start state
-        SceneManager.LoadScene(activeSlot.Get_LevelData());
-        Save(activeSlot.Get_FilePath());
+        // Enter level 1. Scene-change listener will update the active level and
+        // ensure an empty state with the new SaveID. Then, scene-loaded
+        // listener will load from the save file
+        SceneManager.LoadScene("Lesson 1");
     }
 
-    // Saves the current scene state to file
+    // Serialize and write to file
     void Save(string path)
     {       
-        d.Log("Save() CALLED");
+        D().Log("Save() CALLED");
 
         // TODO: FINISH
         // Disable interactions while actively saving/loading (currently stub)
@@ -160,33 +222,34 @@ public class SaveManager
 
     public void QuickLoad() 
     {
-        d.Log("QuickLoad() CALLED");
-        Load(activeSlot.Get_FilePath());
+        D().Log("QuickLoad() CALLED");
+        UndoManager.Instance.Reset();
+        LoadFrom_file(activeSlot.Get_FilePath());
     }
-
-    string pendingLoadPath = null;
 
     public void LoadFromSlot(int slotNo)
     {
-        d.Log($"LOADING SAVE FILE from slot {slotNo}");
+        D().Log($"LOADING SAVE FILE from slot {slotNo}");
+
+        // Activate selected save slot and grab a reference to it
         man.ActivateSaveSlot_occupied(slotNo);
-
-        // Grab reference to current save slot
         activeSlot = man.GetActiveSlot();
-        pendingLoadPath = activeSlot.Get_FilePath();
 
-        // Enter the level; wait for scene to finish loading before loading save
+        // Restore the SaveID
+        saveData.saveID = activeSlot.Get_FileName();
+        
+        // Serialize manifest and save to file
+        string man_serial = JsonUtility.ToJson(man, prettyPrint: true);
+        WriteJsonToFile(paths.manFilePath, man_serial);
+
+        // Set up listener for scene to finish loading.
+        pendingAction = "load";
         SceneManager.sceneLoaded += OnSceneLoaded;
+
+        // Begin loading the scene. Scene-change listener will update the active
+        // level and ensure empty state, then Scene-loaded listener will load
+        // from the save file
         SceneManager.LoadScene(activeSlot.Get_LevelData());
-    }
-
-    // Listener waits for scene to finish loading
-    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-
-        Load(pendingLoadPath);
-        pendingLoadPath = null;
     }
 
     struct LoadPlan
@@ -196,37 +259,59 @@ public class SaveManager
         public HashSet<Guid> spawnIDs;
     }
 
-    void Load(string path)
+    // Read from file, deserialize, and apply state
+    void LoadFrom_file(string path)
     {
-        d.Log("Load() CALLED");
+        D().Log("LoadFrom_file() CALLED");
         isLoadingOrSaving = true;
 
         // Re-populate saveData from the save file
         string saveData_serial = ReadJsonFromFile(path);
-        if (saveData_serial == "") { d.Error("LOAD FAILED"); return; }
+        if (saveData_serial == "") { D().Error("LOAD FAILED"); return; }
         JsonUtility.FromJsonOverwrite(saveData_serial, saveData);
 
-        // Sort by delete/update/spawn
-        LoadPlan plan = BuildLoadPlan();
-        
-        // Perform and count deletes/updates/spawns
-        int dCt = Load_delete(plan.deleteIDs);
-        int uCt = Load_update(plan.updateIDs);
-        int sCt = Load_spawn(plan.spawnIDs);
+        // Restore objects and type counters
+        Load_ApplyState(saveData);
 
-        // Rebuild type indices from the restored save data
-        types.RestoreTypeCounters(saveData);
+        isLoadingOrSaving = false;
+    }
+
+    // Just for semantic consistency. Applies state from a SaveData object
+    public void LoadFrom_object(SaveData sd)
+    {
+        D().Log("LoadFrom_object() CALLED");
+        isLoadingOrSaving = true;
+
+        Load_ApplyState(sd);
+
         isLoadingOrSaving = false;
     }
 
     // LOAD HELPERS
+    void Load_ApplyState(SaveData sd)
+    {
+        // Sort by delete/update/spawn
+        LoadPlan plan = BuildLoadPlan(sd);
+        
+        // Perform and count deletes/updates/spawns
+        int dCt = Load_delete(plan.deleteIDs);
+        int uCt = Load_update(plan.updateIDs, sd);
+        int sCt = Load_spawn(plan.spawnIDs, sd);
+        D().Log($"LOADED: Deleted {dCt} ; Updated {uCt} ; Spawned {sCt}");
 
+        // Rebuild type indices from the restored save data
+        types.RestoreTypeCounters(saveData);
+
+        // Make sure authoritative saveData matches the new state
+        saveData = new SaveData(sd);
+    }
+    
     // Place IDs into delete/update/spawn buckets
-    LoadPlan BuildLoadPlan()
+    LoadPlan BuildLoadPlan(SaveData sd)
     {
         var liveIDs = cIDs.Keys.ToHashSet();
-        var savedIDs = saveData.objectStates.Keys.ToHashSet();
-
+        var savedIDs = sd.objectStates.Keys.ToHashSet();
+        
         LoadPlan p = new LoadPlan
         {
             deleteIDs = liveIDs.Except(savedIDs).ToHashSet(),
@@ -237,10 +322,31 @@ public class SaveManager
         int expD = p.deleteIDs.Count;
         int expU = p.updateIDs.Count;
         int expS = p.spawnIDs.Count;
-        d.Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
+        D().Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
 
         return p;
     }
+
+    
+    // LoadPlan BuildLoadPlan_OLD()
+    // {
+    //     var liveIDs = cIDs.Keys.ToHashSet();
+    //     var savedIDs = saveData.objectStates.Keys.ToHashSet();
+
+    //     LoadPlan p = new LoadPlan
+    //     {
+    //         deleteIDs = liveIDs.Except(savedIDs).ToHashSet(),
+    //         updateIDs = liveIDs.Intersect(savedIDs).ToHashSet(),
+    //         spawnIDs = savedIDs.Except(liveIDs).ToHashSet()
+    //     };
+
+    //     int expD = p.deleteIDs.Count;
+    //     int expU = p.updateIDs.Count;
+    //     int expS = p.spawnIDs.Count;
+    //     D().Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
+
+    //     return p;
+    // }
 
     // Delete objects that are in the current scene but not in the save file
     int Load_delete(HashSet<Guid> dIDs)
@@ -249,7 +355,7 @@ public class SaveManager
 
         foreach (var id in dIDs)
         {
-            d.Log($"DELETING component {id}");
+            D().Log($"DELETING component {id}");
             cIDs[id].Delete();
             dCt++;
         }
@@ -258,14 +364,14 @@ public class SaveManager
     }
 
     // Update objects that are present in both the current scene and save file
-    int Load_update(HashSet<Guid> uIDs)
+    int Load_update(HashSet<Guid> uIDs, SaveData sd)
     {
         int uCt = 0;
 
         foreach (var id in uIDs)
         {
-            d.Log($"UPDATING component {id}");
-            saveData.objectStates[id].Apply_ObjectState(cIDs[id]);
+            D().Log($"UPDATING component {id}");
+            sd.objectStates[id].Apply_ObjectState(cIDs[id]);
             uCt++;
         }
 
@@ -273,14 +379,14 @@ public class SaveManager
     }
 
     // Spawn objects present in the save file and not in the current scene
-    int Load_spawn(HashSet<Guid> sIDs)
+    int Load_spawn(HashSet<Guid> sIDs, SaveData sd)
     {
         int sCt = 0;
 
         foreach (var id in sIDs)
         {
-            d.Log($"SPAWNING component {id}");
-            if (!SpawnAndRegisterObjectFromState(id, saveData.objectStates[id]))
+            D().Log($"SPAWNING component {id}");
+            if (!SpawnAndRegisterObjectFromState(id, sd.objectStates[id]))
                 continue;
             sCt++;
         }
@@ -306,7 +412,7 @@ public class SaveManager
         if (cID == null)
         {
             string errMsg = $"Prefab {prefab.name} missing ComponentID";
-            d.Error($"SPAWN FAILED--{errMsg}");
+            D().Error($"SPAWN FAILED--{errMsg}");
             UnityEngine.Object.Destroy(go);
             return false;
         }
@@ -330,7 +436,7 @@ public class SaveManager
         if (prefab == null)
         {
             string pfPath = $"Resources/Components/{key}.prefab";
-            d.Error($"No prefab found at {pfPath}");
+            D().Error($"No prefab found at {pfPath}");
         }
 
         return prefab;
@@ -343,10 +449,10 @@ public class SaveManager
         try
         {
             File.WriteAllText(path, jsonData);
-            d.Success($"WROTE to {path}");
+            D().Success($"WROTE to {path}");
         }
         catch (Exception e)
-            { d.Error($"WRITE FAILED--{e.Message}"); }
+            { D().Error($"WRITE FAILED--{e.Message}"); }
     }
 
     string ReadJsonFromFile(string path)
@@ -355,10 +461,10 @@ public class SaveManager
         try
         {
             jsonData = File.ReadAllText(path);
-            d.Success($"READ from {path}");
+            D().Success($"READ from {path}");
         }
         catch (Exception e)
-            { d.Error($"READ FAILED--{e.Message}"); }
+            { D().Error($"READ FAILED--{e.Message}"); }
         
         return jsonData;
     }

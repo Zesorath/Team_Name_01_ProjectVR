@@ -26,6 +26,7 @@ public class ObjectState
         type = cID.type;
         index = cID.index;
         label = cID.label;
+        Capture_ObjectState(cID);
     }
 
     // For serializing

@@ -19,18 +19,16 @@ public class SaveManifest
 
     public void ActivateSaveSlot_empty(int slotNo, SaveData sd)
     {
-        SetActiveSlot(slotNo);
-        
+        SetActiveSlotNo(slotNo);
         SaveSlot curr = GetActiveSlot();
         curr.MarkNotEmpty();
         curr.Capture_SaveFilePath(sd);
-        curr.Set_LevelData("Lesson 1");
         curr.Capture_WhenLastUsed();
     }
 
     public void ActivateSaveSlot_occupied(int slotNo)
     {
-        SetActiveSlot(slotNo);
+        SetActiveSlotNo(slotNo);
 
         SaveSlot curr = GetActiveSlot();
         curr.Capture_WhenLastUsed();
@@ -49,7 +47,7 @@ public class SaveManifest
         curr.MakeEmpty();
     }
 
-    public void SetActiveSlot(int slotNo) { lastSlotUsed = slotNo - 1; }
+    public void SetActiveSlotNo(int slotNo) { lastSlotUsed = slotNo - 1; }
 
     public SaveSlot GetActiveSlot() { return slots[lastSlotUsed]; }
 

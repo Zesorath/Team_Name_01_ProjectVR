@@ -91,7 +91,7 @@ public class ComponentID : MonoBehaviour
         // Grab a reference to the XR component
         grab = GetComponent<XRGrabInteractable>();
         if (grab == null) 
-            { d.Error($"{gameObject.name} missing XRGrabInteractable"); return; }
+            { d.Error($"{gameObject.name} missing XRGrabInteractable");return; }
 
         // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
@@ -118,14 +118,23 @@ public class ComponentID : MonoBehaviour
     void OnReleased(SelectExitEventArgs args)
     {
         // Skip if already registered
-        if (registered) return;
+        if (!registered)
+        {
+            // Register first time object is released outside the spawner
+            // radius, plus a tiny epsilon to prevent jitter. Un-parent it and
+            // mark as no longer display
+            float d = Vector3.Distance(
+                transform.position, osTransform.position
+            );
+            if (d > osRadius + 0.01f && isDisplay == true) 
+                { transform.SetParent(null); isDisplay = false; Init(); }
+        }
 
-        // Register first time object is released outside the spawner radius, 
-        // plus a tiny epsilon to prevent jitter. Un=parent it and mark as no
-        // longer display
-        float d = Vector3.Distance(transform.position, osTransform.position);
-        if (d > osRadius + 0.01f && isDisplay == true) 
-            { transform.SetParent(null); isDisplay = false; Init(); }
+        // Refresh the authoritative saveData
+        SaveManager.Instance.CaptureLiveState();
+
+        // Push snapshot to the undo stack
+        UndoManager.Instance.Do();
     }
 
     // Subscribe to grab listener on Awake()
