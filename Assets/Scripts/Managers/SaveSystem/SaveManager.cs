@@ -271,7 +271,7 @@ public class SaveManager
         JsonUtility.FromJsonOverwrite(saveData_serial, saveData);
 
         // Restore objects and type counters
-        Load_ApplyState(saveData);
+        Load_ApplyState();
 
         isLoadingOrSaving = false;
     }
@@ -282,35 +282,34 @@ public class SaveManager
         D().Log("LoadFrom_object() CALLED");
         isLoadingOrSaving = true;
 
-        Load_ApplyState(sd);
+        // Copy argument into authoritative saveData
+        saveData = new SaveData(sd);
+        Load_ApplyState();
 
         isLoadingOrSaving = false;
     }
 
     // LOAD HELPERS
-    void Load_ApplyState(SaveData sd)
+    void Load_ApplyState()
     {
         // Sort by delete/update/spawn
-        LoadPlan plan = BuildLoadPlan(sd);
+        LoadPlan plan = BuildLoadPlan();
         
         // Perform and count deletes/updates/spawns
         int dCt = Load_delete(plan.deleteIDs);
-        int uCt = Load_update(plan.updateIDs, sd);
-        int sCt = Load_spawn(plan.spawnIDs, sd);
+        int uCt = Load_update(plan.updateIDs);
+        int sCt = Load_spawn(plan.spawnIDs);
         D().Log($"LOADED: Deleted {dCt} ; Updated {uCt} ; Spawned {sCt}");
 
         // Rebuild type indices from the restored save data
         types.RestoreTypeCounters(saveData);
-
-        // Make sure authoritative saveData matches the new state
-        saveData = new SaveData(sd);
     }
     
     // Place IDs into delete/update/spawn buckets
-    LoadPlan BuildLoadPlan(SaveData sd)
+    LoadPlan BuildLoadPlan()
     {
         var liveIDs = cIDs.Keys.ToHashSet();
-        var savedIDs = sd.objectStates.Keys.ToHashSet();
+        var savedIDs = saveData.objectStates.Keys.ToHashSet();
         
         LoadPlan p = new LoadPlan
         {
@@ -326,27 +325,6 @@ public class SaveManager
 
         return p;
     }
-
-    
-    // LoadPlan BuildLoadPlan_OLD()
-    // {
-    //     var liveIDs = cIDs.Keys.ToHashSet();
-    //     var savedIDs = saveData.objectStates.Keys.ToHashSet();
-
-    //     LoadPlan p = new LoadPlan
-    //     {
-    //         deleteIDs = liveIDs.Except(savedIDs).ToHashSet(),
-    //         updateIDs = liveIDs.Intersect(savedIDs).ToHashSet(),
-    //         spawnIDs = savedIDs.Except(liveIDs).ToHashSet()
-    //     };
-
-    //     int expD = p.deleteIDs.Count;
-    //     int expU = p.updateIDs.Count;
-    //     int expS = p.spawnIDs.Count;
-    //     D().Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
-
-    //     return p;
-    // }
 
     // Delete objects that are in the current scene but not in the save file
     int Load_delete(HashSet<Guid> dIDs)
@@ -364,14 +342,14 @@ public class SaveManager
     }
 
     // Update objects that are present in both the current scene and save file
-    int Load_update(HashSet<Guid> uIDs, SaveData sd)
+    int Load_update(HashSet<Guid> uIDs)
     {
         int uCt = 0;
 
         foreach (var id in uIDs)
         {
             D().Log($"UPDATING component {id}");
-            sd.objectStates[id].Apply_ObjectState(cIDs[id]);
+            saveData.objectStates[id].Apply_ObjectState(cIDs[id]);
             uCt++;
         }
 
@@ -379,14 +357,14 @@ public class SaveManager
     }
 
     // Spawn objects present in the save file and not in the current scene
-    int Load_spawn(HashSet<Guid> sIDs, SaveData sd)
+    int Load_spawn(HashSet<Guid> sIDs)
     {
         int sCt = 0;
 
         foreach (var id in sIDs)
         {
             D().Log($"SPAWNING component {id}");
-            if (!SpawnAndRegisterObjectFromState(id, sd.objectStates[id]))
+            if (!SpawnAndRegisterObjectFromState(id, saveData.objectStates[id]))
                 continue;
             sCt++;
         }
