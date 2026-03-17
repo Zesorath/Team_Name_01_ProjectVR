@@ -49,6 +49,8 @@ public class SaveManifest
 
     public void SetActiveSlotNo(int slotNo) { lastSlotUsed = slotNo - 1; }
 
+    public int GetLastSlotNo() { return lastSlotUsed + 1; }
+
     public SaveSlot GetActiveSlot() { return slots[lastSlotUsed]; }
 
     public bool SlotIsEmpty(int slotNo) { return slots[slotNo-1].isEmpty; }

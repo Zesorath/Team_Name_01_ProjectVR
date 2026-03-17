@@ -31,14 +31,14 @@ public class InputManager : MonoBehaviour
         bool ctrl = Input.GetKey(KeyCode.LeftControl) 
             || Input.GetKey(KeyCode.RightControl);
         
-        // Save current scene to file
+        // Save current scene to the active save slot
         if (Input.GetKeyDown(KeyCode.F5)) 
         {
             Debug.Log($"{splash}F5 pressed. Calling QuickSave()");
             sm.QuickSave();
         }
 
-        // Load from the most recent save file
+        // Restore the most recent saved state from the current save slot
         if (Input.GetKeyDown(KeyCode.F9))
         {
             Debug.Log($"{splash}F9 pressed. Calling QuickLoad()");
@@ -52,6 +52,8 @@ public class InputManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F10)) sm.LoadFromSlot(1);
         if (Input.GetKeyDown(KeyCode.F11)) sm.LoadFromSlot(2);
         if (Input.GetKeyDown(KeyCode.F12)) sm.LoadFromSlot(3);
+
+        if (ctrl && Input.GetKeyDown(KeyCode.F9)) sm.Continue();
 
         if (ctrl && Input.GetKeyDown(KeyCode.Z)) um.Undo();
         if (ctrl && Input.GetKeyDown(KeyCode.Y)) um.Redo();

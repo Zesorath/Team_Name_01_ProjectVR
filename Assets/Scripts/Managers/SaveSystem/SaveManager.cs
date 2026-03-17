@@ -24,6 +24,7 @@ public class SaveManager
     public readonly SavePaths paths;
     public bool isLoadingOrSaving = false;
     bool isInitialized = false;
+    Action<string> PendingAction = null;
     
     SaveSlot activeSlot;
     public SaveData saveData;
@@ -59,12 +60,6 @@ public class SaveManager
         
         // Mark as initialized
         isInitialized = true;
-    }
-
-    void OnSceneChanged(Scene oldScene, Scene newScene)
-    {
-        activeSlot.Set_LevelData(newScene.name);
-        Reset_sameID();
     }
 
     // Clear the current SaveManager instance. Re-roll saveID
@@ -139,25 +134,15 @@ public class SaveManager
     }
     
     // SAVE
-    string pendingAction = null;
-
-    // Listener waits for scene to finish loading, then performs save/load
-    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
-    {
-        SceneManager.sceneLoaded -= OnSceneLoaded;
-
-        string path = activeSlot.Get_FilePath();
-        if (pendingAction == "save") Save(path);
-        else if (pendingAction == "load") LoadFrom_file(path);
-        else D().Error($"Invalid pendingAction");
-
-        pendingAction = null;
-    }
 
     public void QuickSave()
     { 
-        D().Log("QuickSave() CALLED");
+        // Do nothing if not inside a level
+        if (activeSlot == null)
+            { D().Warn("QuickSave() FAILED--No active save slot"); return; }
         
+        D().Log($"QuickSaving in slot {man.GetLastSlotNo()}");
+
         // Grab the timestamp
         activeSlot.Capture_WhenLastUsed();
 
@@ -172,6 +157,20 @@ public class SaveManager
     // Creates a new save file in the specified save slot
     public void SaveToSlot(int slotNo)
     {
+        // Do nothing if already inside a level
+        if (activeSlot != null)
+        {
+            D().Error($"SaveToSlot({slotNo}) FAILED--slot already active");
+            return;
+        }
+        
+        // Do nothing if slot already contains a fave file
+        if (!man.SlotIsEmpty(slotNo))
+        {
+            D().Error($"SaveToSlot({slotNo}) FAILED--slot not empty");
+            return;
+        }
+
         D().Log($"CREATING NEW SAVE FILE in slot {slotNo}");
 
         // Start brand new save file
@@ -186,7 +185,7 @@ public class SaveManager
         WriteJsonToFile(paths.manFilePath, man_serial);
         
         // Set up listener for scene to finish loading.
-        pendingAction = "save";
+        PendingAction = Save;
         SceneManager.sceneLoaded += OnSceneLoaded;
 
         // Enter level 1. Scene-change listener will update the active level and
@@ -222,13 +221,47 @@ public class SaveManager
 
     public void QuickLoad() 
     {
-        D().Log("QuickLoad() CALLED");
+        // Do nothing if not inside a level
+        if (activeSlot == null)
+            { D().Error("QuickLoad() FAILED--No active save slot"); return; }
+        
+        D().Log($"QuickLoading from slot {man.GetLastSlotNo()}");
+
         UndoManager.Instance.Reset();
         LoadFrom_file(activeSlot.Get_FilePath());
     }
 
+    // Load from the most reccently used save slot
+    public void Continue()
+    {
+        // Do nothing if already inside a level
+        if (activeSlot != null)
+        {
+            D().Error($"Continue() FAILED--a save slot is already active");
+            return;
+        }
+
+        int slotNo = man.GetLastSlotNo();
+        LoadFromSlot(slotNo);
+    }
+
     public void LoadFromSlot(int slotNo)
     {
+        // Do nothing if the selected slot is empty
+        if (man.SlotIsEmpty(slotNo))
+        {
+            D().Error($"LoadFromSlot({slotNo}) FAILED--slot empty");
+            return;
+        }
+
+        // Do nothing if already inside a level
+        if (activeSlot != null)
+            // Seeing this from Continue() means something has gone wrong
+        {
+            D().Error($"SaveToSlot({slotNo}) FAILED--slot already active");
+            return;
+        }
+
         D().Log($"LOADING SAVE FILE from slot {slotNo}");
 
         // Activate selected save slot and grab a reference to it
@@ -243,7 +276,7 @@ public class SaveManager
         WriteJsonToFile(paths.manFilePath, man_serial);
 
         // Set up listener for scene to finish loading.
-        pendingAction = "load";
+        PendingAction = LoadFrom_file;
         SceneManager.sceneLoaded += OnSceneLoaded;
 
         // Begin loading the scene. Scene-change listener will update the active
@@ -262,7 +295,7 @@ public class SaveManager
     // Read from file, deserialize, and apply state
     void LoadFrom_file(string path)
     {
-        D().Log("LoadFrom_file() CALLED");
+        D().Log($"Loading from {path}");
         isLoadingOrSaving = true;
 
         // Re-populate saveData from the save file
@@ -279,10 +312,10 @@ public class SaveManager
     // Just for semantic consistency. Applies state from a SaveData object
     public void LoadFrom_object(SaveData sd)
     {
-        D().Log("LoadFrom_object() CALLED");
+        D().Log("Loading from object");
         isLoadingOrSaving = true;
 
-        // Copy argument into authoritative saveData
+        // Copy sd into authoritative saveData
         saveData = new SaveData(sd);
         Load_ApplyState();
 
@@ -445,5 +478,28 @@ public class SaveManager
             { D().Error($"READ FAILED--{e.Message}"); }
         
         return jsonData;
+    }
+
+    // LISTENERS
+
+    // Waits for scene to finish loading, then performs save/load
+    void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+    {
+        SceneManager.sceneLoaded -= OnSceneLoaded;
+
+        // Call save/load as specified without branching logic
+        string path = activeSlot.Get_FilePath();
+        PendingAction(path);
+        PendingAction = null;
+    }
+
+    // On calling LoadScene(), set the current scene's level to the destination
+    // scene and clear the authoritative saveData
+    void OnSceneChanged(Scene oldScene, Scene newScene)
+    {
+        if (activeSlot == null) return;
+        
+        activeSlot.Set_LevelData(newScene.name);
+        Reset_sameID();
     }
 }
