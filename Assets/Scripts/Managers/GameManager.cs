@@ -40,4 +40,13 @@ public class GameManager : MonoBehaviour
     {
         SceneManager.LoadScene(7);
     }
+
+        public static void ExitGame()
+    {
+    #if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+    #else
+        Application.Quit();
+    #endif
+    }
 }
