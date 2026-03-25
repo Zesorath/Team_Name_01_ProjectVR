@@ -16,6 +16,17 @@ public class LED_Component : CircuitComponentBase
 
     private float currentVoltage = 0f;
 
+    [Header("UI Display")]
+    public TMPro.TextMeshProUGUI forwardVoltageLabel;
+    public TMPro.TextMeshProUGUI maxVoltageLabel;
+
+    [Header("Runtime Adjustment")]
+    public float voltageStep = 0.1f;
+    public float minForwardVoltage = 0.1f;
+    public float maxForwardVoltage = 5f;
+    public float minMaxVoltage = 0.1f;
+    public float maxMaxVoltage = 10f;
+
     protected override void Awake()
     {
         base.Awake();
@@ -33,7 +44,37 @@ public class LED_Component : CircuitComponentBase
         Debug.Log($"[LED] Adding TEST resistor for LED between {nodeA} and {nodeB}");
     }
 
-   
+    public void IncrementForwardVoltage()
+    {
+        forwardVoltage = Mathf.Clamp(forwardVoltage + voltageStep, minForwardVoltage, maxForwardVoltage);
+        if (forwardVoltageLabel != null)
+            forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
+        UpdateLEDState(currentVoltage);
+    }
+
+    public void DecrementForwardVoltage()
+    {
+        forwardVoltage = Mathf.Clamp(forwardVoltage - voltageStep, minForwardVoltage, maxForwardVoltage);
+        if (forwardVoltageLabel != null)
+            forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
+        UpdateLEDState(currentVoltage);
+    }
+
+    public void IncrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage + voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1}V";
+        UpdateLEDState(currentVoltage);
+    }
+
+    public void DecrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage - voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1}V";
+        UpdateLEDState(currentVoltage);
+    }
     public void UpdateLEDState(float voltageDrop)
     {
         currentVoltage = voltageDrop;
