@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using SpiceSharp;
 using SpiceSharp.Components;
 
@@ -11,10 +11,23 @@ public class LED_Component : CircuitComponentBase
     public Color brightColor = Color.white;
 
     [Header("Electrical Characteristics")]
-    public float forwardVoltage = 1.6f; // Threshold where LED begins lighting
-    public float maxVoltage = 2.5f;     // Max brightness voltage
+    [Tooltip("Forward voltage used for Shockley Is calculation. Controls real diode behaviour in simulation.")]
+    public float forwardVoltage = 2.0f;
 
-    private float currentVoltage = 0f;
+    [Tooltip("Minimum measured voltage across LED before it visually turns ON. Keep below forwardVoltage for visible glow.")]
+    public float onThreshold = 1.0f;      // visual ON threshold — separate from Shockley model Vf
+
+    [Tooltip("Voltage at which the LED reaches full brightness.")]
+    public float maxVoltage = 5.0f;
+
+    public float currentVoltage = 0f;
+
+    /// <summary>Public accessor used by the save system (ObjectState).</summary>
+    public float CurrentVoltage
+    {
+        get => currentVoltage;
+        set => currentVoltage = value;
+    }
 
     [Header("UI Display")]
     public TMPro.TextMeshProUGUI forwardVoltageLabel;
@@ -36,13 +49,37 @@ public class LED_Component : CircuitComponentBase
 
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        float fakeResistance = 1000f;
-        // Example: treat LED as a test resistor for now
-        string rName = $"R_{componentId}_LED";
-        ckt.Add(new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, fakeResistance));
+        string modelName = $"D_{componentId}_model";
+        string diodeName = $"D_{componentId}";
 
-        Debug.Log($"[LED] Adding TEST resistor for LED between {nodeA} and {nodeB}");
+        // Derive saturation current from forwardVoltage via Shockley equation:
+        // Is = If / exp(Vf / (N * Vt))
+        const double N = 2.0;       // emission coefficient (2 = typical for LEDs)
+        const double Vt = 0.02585;  // thermal voltage at room temperature (kT/q)
+        const double If = 0.02;     // reference forward current (20 mA)
+        double Is = If / System.Math.Exp((double)forwardVoltage / (N * Vt));
+        // Clamp Is so the diode stays numerically stable in SpiceSharp.
+        // 1e-30 causes near-zero Jacobian entries → convergence failure.
+        // 1e-20 keeps Is large enough for Newton-Raphson while still giving
+        // accurate Vf up to ~2.6 V; above that the model saturates gracefully.
+        Is = System.Math.Max(Is, 1e-20);
+
+        var model = new SpiceSharp.Components.DiodeModel(modelName);
+        model.SetParameter("is", Is);
+        model.SetParameter("n", N);
+        model.SetParameter("rs", 10.0); // ~10 Ω bulk series resistance
+        ckt.Add(model);
+
+        // nodeA = anode (cap+ / supply side), nodeB = cathode — correct SPICE order
+        var diode = new SpiceSharp.Components.Diode(diodeName, nodeA, nodeB, modelName);
+        ckt.Add(diode);
+
+        Debug.Log($"[LED] {componentId}: Vf={forwardVoltage:F2}V  Is={Is:E3}A  onThreshold={onThreshold:F2}V");
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // Runtime VR controls
+    // ─────────────────────────────────────────────────────────────
 
     public void IncrementForwardVoltage()
     {
@@ -50,6 +87,7 @@ public class LED_Component : CircuitComponentBase
         if (forwardVoltageLabel != null)
             forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
         UpdateLEDState(currentVoltage);
+        CircuitManager.Instance.NotifyConnectionChanged();
     }
 
     public void DecrementForwardVoltage()
@@ -58,6 +96,7 @@ public class LED_Component : CircuitComponentBase
         if (forwardVoltageLabel != null)
             forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
         UpdateLEDState(currentVoltage);
+        CircuitManager.Instance.NotifyConnectionChanged();
     }
 
     public void IncrementMaxVoltage()
@@ -75,6 +114,11 @@ public class LED_Component : CircuitComponentBase
             maxVoltageLabel.text = $"Vmax: {maxVoltage:F1}V";
         UpdateLEDState(currentVoltage);
     }
+
+    // ─────────────────────────────────────────────────────────────
+    // Called every simulation step by CircuitManager
+    // voltageDrop = |V(nodeA) - V(nodeB)| across the LED terminals
+    // ─────────────────────────────────────────────────────────────
     public void UpdateLEDState(float voltageDrop)
     {
         currentVoltage = voltageDrop;
@@ -84,32 +128,22 @@ public class LED_Component : CircuitComponentBase
 
         Material mat = ledRenderer.material;
 
-        // OFF behavior
-        if (voltageDrop < forwardVoltage)
+        if (voltageDrop < onThreshold)
         {
+            // LED is OFF
+            mat.color = offColor;
             mat.SetColor("_EmissionColor", offColor);
-            ledRenderer.material.color = offColor;
-            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → OFF");
-            return;
+            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → OFF  (onThreshold={onThreshold:F2}V)");
         }
-
-        // ON behavior — scale brightness
-        float t = Mathf.InverseLerp(forwardVoltage, maxVoltage, voltageDrop);
-        Color finalColor = Color.Lerp(dimColor, brightColor, t);
-
-        ledRenderer.material.color = finalColor;
-        mat.SetColor("_EmissionColor", finalColor * 2f); // glow
-
-        Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON ({t:P0})");
-    }
-    public float CurrentVoltage
-    {
-        get { return currentVoltage; }
-        set
+        else
         {
-            currentVoltage = value;
-            UpdateLEDState(currentVoltage);
+            // Brightness: 0% at onThreshold, 100% at maxVoltage
+            float t = Mathf.Clamp01(Mathf.InverseLerp(onThreshold, maxVoltage, voltageDrop));
+            Color c = Color.Lerp(dimColor, brightColor, t);
+            mat.color = c;
+            // HDR emission: doubles in stops as brightness increases
+            mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 3f));
+            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON  {t * 100f:F0}%");
         }
     }
-
 }
