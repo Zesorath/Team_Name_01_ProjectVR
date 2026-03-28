@@ -20,7 +20,10 @@ public class CapacitorComponent : CircuitComponentBase
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
         string cName = $"C_{componentId}";
-        ckt.Add(new SpiceSharp.Components.Capacitor(cName, nodeA, nodeB, capacitanceFarads));
+        var cap = new SpiceSharp.Components.Capacitor(cName, nodeA, nodeB, capacitanceFarads);
+        if (initialVoltage != 0.0)
+            cap.SetParameter("ic", initialVoltage);
+        ckt.Add(cap);
     }
     public void IncrementCapacitance()
     {
