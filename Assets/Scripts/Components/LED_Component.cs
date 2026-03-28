@@ -2,27 +2,26 @@ using UnityEngine;
 using SpiceSharp;
 using SpiceSharp.Components;
 
+
 public class LED_Component : CircuitComponentBase
 {
-    [Header("LED Visual Settings")]
+    [Header("Bulb Visual Settings")]
     public Renderer ledRenderer;
-    public Color offColor = Color.black;
-    public Color dimColor = new Color(1f, 0.2f, 0.2f);
-    public Color brightColor = Color.white;
+    public Color offColor     = Color.black;
+    public Color dimColor     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
+    public Color brightColor  = new Color(1f, 0.98f, 0.85f);   // bright warm white
 
     [Header("Electrical Characteristics")]
-    [Tooltip("Forward voltage used for Shockley Is calculation. Controls real diode behaviour in simulation.")]
-    public float forwardVoltage = 2.0f;
+    [Tooltip("Bulb resistance in ohms. Controls how bright it glows and how fast the cap discharges.\n" +
+             "Lower R = brighter + faster discharge. Typical range: 100–2000 Ω.\n")]
 
-    [Tooltip("Minimum measured voltage across LED before it visually turns ON. Keep below forwardVoltage for visible glow.")]
-    public float onThreshold = 1.0f;      // visual ON threshold — separate from Shockley model Vf
+    public float resistance = 1000f;
 
-    [Tooltip("Voltage at which the LED reaches full brightness.")]
+    [Tooltip("Voltage across the bulb that maps to 100 % brightness.")]
     public float maxVoltage = 5.0f;
 
+    // Used by save system (ObjectState) — keep name/accessor stable
     public float currentVoltage = 0f;
-
-    /// <summary>Public accessor used by the save system (ObjectState).</summary>
     public float CurrentVoltage
     {
         get => currentVoltage;
@@ -30,15 +29,16 @@ public class LED_Component : CircuitComponentBase
     }
 
     [Header("UI Display")]
-    public TMPro.TextMeshProUGUI forwardVoltageLabel;
+    public TMPro.TextMeshProUGUI resistanceLabel;
     public TMPro.TextMeshProUGUI maxVoltageLabel;
 
     [Header("Runtime Adjustment")]
-    public float voltageStep = 0.1f;
-    public float minForwardVoltage = 0.1f;
-    public float maxForwardVoltage = 5f;
-    public float minMaxVoltage = 0.1f;
-    public float maxMaxVoltage = 10f;
+    public float resistanceStep  = 100f;
+    public float minResistance   = 10f;
+    public float maxResistance   = 10000f;
+    public float voltageStep     = 0.5f;
+    public float minMaxVoltage   = 0.5f;
+    public float maxMaxVoltage   = 12f;
 
     protected override void Awake()
     {
@@ -47,77 +47,20 @@ public class LED_Component : CircuitComponentBase
             ledRenderer = GetComponentInChildren<Renderer>();
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // SpiceSharp — bulb is a pure resistor; no diode model needed
+    // ─────────────────────────────────────────────────────────────
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        string modelName = $"D_{componentId}_model";
-        string diodeName = $"D_{componentId}";
-
-        // Derive saturation current from forwardVoltage via Shockley equation:
-        // Is = If / exp(Vf / (N * Vt))
-        const double N = 2.0;       // emission coefficient (2 = typical for LEDs)
-        const double Vt = 0.02585;  // thermal voltage at room temperature (kT/q)
-        const double If = 0.02;     // reference forward current (20 mA)
-        double Is = If / System.Math.Exp((double)forwardVoltage / (N * Vt));
-        // Clamp Is so the diode stays numerically stable in SpiceSharp.
-        // 1e-30 causes near-zero Jacobian entries → convergence failure.
-        // 1e-20 keeps Is large enough for Newton-Raphson while still giving
-        // accurate Vf up to ~2.6 V; above that the model saturates gracefully.
-        Is = System.Math.Max(Is, 1e-20);
-
-        var model = new SpiceSharp.Components.DiodeModel(modelName);
-        model.SetParameter("is", Is);
-        model.SetParameter("n", N);
-        model.SetParameter("rs", 10.0); // ~10 Ω bulk series resistance
-        ckt.Add(model);
-
-        // nodeA = anode (cap+ / supply side), nodeB = cathode — correct SPICE order
-        var diode = new SpiceSharp.Components.Diode(diodeName, nodeA, nodeB, modelName);
-        ckt.Add(diode);
-
-        Debug.Log($"[LED] {componentId}: Vf={forwardVoltage:F2}V  Is={Is:E3}A  onThreshold={onThreshold:F2}V");
+        string rName = $"R_{componentId}_BULB";
+        var r = new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, resistance);
+        ckt.Add(r);
+        Debug.Log($"[Bulb] {componentId}: {resistance:F0} Ω  ({nodeA} → {nodeB})");
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Runtime VR controls
-    // ─────────────────────────────────────────────────────────────
-
-    public void IncrementForwardVoltage()
-    {
-        forwardVoltage = Mathf.Clamp(forwardVoltage + voltageStep, minForwardVoltage, maxForwardVoltage);
-        if (forwardVoltageLabel != null)
-            forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
-        UpdateLEDState(currentVoltage);
-        CircuitManager.Instance.NotifyConnectionChanged();
-    }
-
-    public void DecrementForwardVoltage()
-    {
-        forwardVoltage = Mathf.Clamp(forwardVoltage - voltageStep, minForwardVoltage, maxForwardVoltage);
-        if (forwardVoltageLabel != null)
-            forwardVoltageLabel.text = $"Vf: {forwardVoltage:F1}V";
-        UpdateLEDState(currentVoltage);
-        CircuitManager.Instance.NotifyConnectionChanged();
-    }
-
-    public void IncrementMaxVoltage()
-    {
-        maxVoltage = Mathf.Clamp(maxVoltage + voltageStep, minMaxVoltage, maxMaxVoltage);
-        if (maxVoltageLabel != null)
-            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1}V";
-        UpdateLEDState(currentVoltage);
-    }
-
-    public void DecrementMaxVoltage()
-    {
-        maxVoltage = Mathf.Clamp(maxVoltage - voltageStep, minMaxVoltage, maxMaxVoltage);
-        if (maxVoltageLabel != null)
-            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1}V";
-        UpdateLEDState(currentVoltage);
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // Called every simulation step by CircuitManager
-    // voltageDrop = |V(nodeA) - V(nodeB)| across the LED terminals
+    // Called every simulation step by CircuitManager.
+    // voltageDrop = |V(nodeA) - V(nodeB)|
     // ─────────────────────────────────────────────────────────────
     public void UpdateLEDState(float voltageDrop)
     {
@@ -128,22 +71,60 @@ public class LED_Component : CircuitComponentBase
 
         Material mat = ledRenderer.material;
 
-        if (voltageDrop < onThreshold)
+        // Use power (V²) curve so the bulb dims realistically — quickly at first,
+        // holding a warm glow longer before going dark.
+        float linear = Mathf.Clamp01(voltageDrop / maxVoltage);
+        float t = linear * linear; // power curve
+
+        if (t < 0.004f) // ~< 10 % of maxVoltage
         {
-            // LED is OFF
             mat.color = offColor;
             mat.SetColor("_EmissionColor", offColor);
-            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → OFF  (onThreshold={onThreshold:F2}V)");
+            Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → OFF");
         }
         else
         {
-            // Brightness: 0% at onThreshold, 100% at maxVoltage
-            float t = Mathf.Clamp01(Mathf.InverseLerp(onThreshold, maxVoltage, voltageDrop));
             Color c = Color.Lerp(dimColor, brightColor, t);
             mat.color = c;
-            // HDR emission: doubles in stops as brightness increases
-            mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 3f));
-            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON  {t * 100f:F0}%");
+            // HDR emission so the bulb actually glows in the scene
+            mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 4f));
+            Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → {t * 100f:F0}%");
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // VR runtime controls
+    // ─────────────────────────────────────────────────────────────
+
+    public void IncrementResistance()
+    {
+        resistance = Mathf.Clamp(resistance + resistanceStep, minResistance, maxResistance);
+        if (resistanceLabel != null)
+            resistanceLabel.text = $"R: {resistance:F0} Ω";
+        CircuitManager.Instance.NotifyConnectionChanged();
+    }
+
+    public void DecrementResistance()
+    {
+        resistance = Mathf.Clamp(resistance - resistanceStep, minResistance, maxResistance);
+        if (resistanceLabel != null)
+            resistanceLabel.text = $"R: {resistance:F0} Ω";
+        CircuitManager.Instance.NotifyConnectionChanged();
+    }
+
+    public void IncrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage + voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1} V";
+        UpdateLEDState(currentVoltage);
+    }
+
+    public void DecrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage - voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1} V";
+        UpdateLEDState(currentVoltage);
     }
 }
