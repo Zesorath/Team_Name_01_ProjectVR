@@ -1,5 +1,4 @@
 using System;
-using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
@@ -40,8 +39,18 @@ public class ComponentID : MonoBehaviour
     public void Delete()
     {
         SaveManager sm = SaveManager.Instance;
-
         sm.Unregister(this);
+
+        // If this is a wire, explicitly destroy its ends first. This fixes a
+        // bug where connected wire ends weren't destroyed automatically by the
+        // parent.
+        Wire wire = GetComponent<Wire>();
+        if (wire)
+        {
+            Destroy(wire.startpoint.gameObject);
+            Destroy(wire.endpoint.gameObject);
+        } 
+
         Destroy(gameObject);
     }
 
@@ -79,7 +88,7 @@ public class ComponentID : MonoBehaviour
     // Used for registering on first release
     bool registered = false;
     public bool isDisplay = false;
-    XRGrabInteractable grab;
+    XRGrabInteractable[] grabs = new XRGrabInteractable[2];
     // Spawner to avoid
     ItemSpawner os; // Origin spawner
     Transform osTransform;
@@ -88,10 +97,30 @@ public class ComponentID : MonoBehaviour
     // Runs on object spawn.
     public void Awake()
     {        
-        // Grab a reference to the XR component
-        grab = GetComponent<XRGrabInteractable>();
-        if (grab == null) 
-            { d.Error($"{gameObject.name} missing XRGrabInteractable");return; }
+        // Grab reference(s) to the XR-grab component(s)
+        grabs[0] = GetComponent<XRGrabInteractable>();
+        if (grabs[0] == null) 
+        {
+            string msg = "Is it a wire?";
+            d.Warn($"{gameObject.name} missing XRGrabInteractable--{msg}");
+            
+            Wire wire = GetComponent<Wire>();
+            if (!wire) { d.Error("No XRGrabInteractable found"); return; }
+
+            if (!wire.startpoint || !wire.endpoint)
+                { d.Error("Wire ends not found"); return; }
+            
+            // Otherwise, set each end's parent cID and grab their grabbers
+            wire.startpoint.parentCID = this;
+            grabs[0] = wire.startpoint.GetComponent<XRGrabInteractable>();
+            
+            wire.endpoint.parentCID = this;
+            grabs[1] = wire.endpoint.GetComponent<XRGrabInteractable>();
+            
+            if (!grabs[0] || !grabs[1])
+                { d.Error("Wire grabs not found"); return; }
+            else d.Success("Wire grabs found");
+        }
 
         // There will be no ItemSpawner if the object is spawned from save file.
         // so go ahead and register the Component
@@ -140,15 +169,17 @@ public class ComponentID : MonoBehaviour
     // Subscribe to grab listener on Awake()
     void OnEnable()
     {
-        if (grab != null) grab.selectExited.AddListener(OnReleased);
+        if (grabs[0] != null) grabs[0].selectExited.AddListener(OnReleased);
+        if (grabs[1] != null) grabs[1].selectExited.AddListener(OnReleased);
     }
 
     // Un-subscribe to grab listener when the object is destroyed
     void OnDisable()
     {
-        if (grab != null) grab.selectExited.RemoveListener(OnReleased);
+        if (grabs[0] != null) grabs[0].selectExited.RemoveListener(OnReleased);
+        if (grabs[1] != null) grabs[1].selectExited.RemoveListener(OnReleased);
     }
 
     // Just announce when the ComponentID object is destroyed
-    public void OnDestroy() { d.Log($"DESTROYED {id}"); }
+    public void OnDestroy() { d.Log($"DESTROYED {id} ({label})"); }
 }

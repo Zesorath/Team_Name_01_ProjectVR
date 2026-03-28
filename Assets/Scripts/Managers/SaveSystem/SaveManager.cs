@@ -98,10 +98,10 @@ public class SaveManager
     // Called by ComponentID to register spawned components with save manager
     public void Register(ComponentID cID)
     {
-        D().Log($"REGISTERING component {cID.id}");
+        D().Log($"REGISTERING component {cID.id} ({cID.label})");
         
         // Registration failure
-        string errMsg = $"FAILED TO REGISTER {cID.id}--";
+        string errMsg = $"FAILED TO REGISTER {cID.id} ({cID.label})--";
         if (cID.id == Guid.Empty) 
             { D().Error($"{errMsg}ID generation failed"); return; }
         if (cIDs.ContainsKey(cID.id)) 
@@ -113,7 +113,7 @@ public class SaveManager
             saveData.objectStates.Add(cID.id, new ObjectState(cID));
         cID.MarkRegistered();
         
-        D().Success($"Component {cID.id} REGISTERED");
+        D().Success($"Component {cID.id} ({cID.label}) REGISTERED");
     }
 
     // TODO: Make this accept only the Guid, since we have the cIDs dictionary
@@ -124,13 +124,13 @@ public class SaveManager
         if (cID == null) 
             { D().Error($"UNREGISTER FAILED--NOT FOUND"); return; }
         
-        D().Log($"UNREGISTERING component {cID.id}");
+        D().Log($"UNREGISTERING component {cID.id} ({cID.label})");
 
         // Unregister component
         cIDs.Remove(cID.id);
         saveData.objectStates.Remove(cID.id);
 
-        D().Success($"Component {cID.id} UNREGISTERED");
+        D().Success($"Component {cID.id} ({cID.label}) UNREGISTERED");
     }
     
     // SAVE
@@ -500,6 +500,11 @@ public class SaveManager
         if (activeSlot == null) return;
         
         activeSlot.Set_LevelData(newScene.name);
+
+        // Serialize and save new level data
+        string man_serial = JsonUtility.ToJson(man, prettyPrint: true);
+        WriteJsonToFile(paths.manFilePath, man_serial);
+
         Reset_sameID();
     }
 }

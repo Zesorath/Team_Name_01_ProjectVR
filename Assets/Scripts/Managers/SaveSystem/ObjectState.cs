@@ -17,6 +17,17 @@ public class ObjectState
     public string label;
     public Vector3 position = Vector3.zero;
     public Quaternion rotation = Quaternion.identity;
+
+    [Serializable]
+    struct WireEndTransform
+    {
+        public Vector3 startPos;
+        public Quaternion startRot;
+        public Vector3 endPos;
+        public Quaternion endRot;
+    }
+
+    [SerializeField] WireEndTransform wt;
     public float voltage;
     public float resistance;
     public float ledVoltage;
@@ -38,12 +49,21 @@ public class ObjectState
             return;
         }
 
-        D().Log($"CAPTURING component {cID.id} state");
+        D().Log($"CAPTURING component {cID.id} ({cID.label}) state");
         
         GameObject go = cID.gameObject;
 
         position = go.transform.position;
         rotation = go.transform.rotation;
+
+        Wire wire = go.GetComponent<Wire>();
+        if (wire)
+        {
+            wt.startPos = wire.startpoint.transform.position;
+            wt.startRot = wire.startpoint.transform.rotation;
+            wt.endPos = wire.endpoint.transform.position;
+            wt.endRot = wire.endpoint.transform.rotation;
+        }
 
         DCSource dc = go.GetComponent<DCSource>();
         if (dc != null) { voltage = dc.voltage; }
@@ -54,7 +74,7 @@ public class ObjectState
         LED_Component led = go.GetComponent<LED_Component>();
         if (led != null) { ledVoltage = led.CurrentVoltage; }
 
-        d.Success($"{cID.id} state CAPTURED");
+        d.Success($"{cID.id} ({cID.label}) state CAPTURED");
     }
 
     // For deserializing
@@ -66,13 +86,13 @@ public class ObjectState
             return;
         }
 
-        D().Log($"APPLYING saved state to component {cID.id}");
+        D().Log($"APPLYING saved state to component {cID.id} ({cID.label})");
 
         // Split because only the fields need to be applied on Load()
         Apply_Transform(cID);
         Apply_Fields(cID);
 
-        D().Success($"{cID.id} state APPLIED");
+        D().Success($"{cID.id} ({cID.label}) state APPLIED");
     }
 
     void Apply_Transform(Component cID)
@@ -86,6 +106,15 @@ public class ObjectState
     public void Apply_Fields(ComponentID cID)
     {
         GameObject go = cID.gameObject;
+
+        Wire wire = go.GetComponent<Wire>();
+        if (wire)
+        {
+            wire.startpoint.transform.position = wt.startPos;
+            wire.startpoint.transform.rotation = wt.startRot;
+            wire.endpoint.transform.position = wt.endPos;
+            wire.endpoint.transform.rotation = wt.endRot;
+        }
 
         DCSource dc = go.GetComponent<DCSource>();
         if (dc != null) { dc.voltage = voltage; }
