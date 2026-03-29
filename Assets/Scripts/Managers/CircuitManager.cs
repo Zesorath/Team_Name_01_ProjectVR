@@ -13,7 +13,7 @@ public class CircuitManager : MonoBehaviour
 
     [Header("Transient Settings")]
     public float timeStep = 0.01f;
-    public float simDuration = 5.0f;
+    public float simDuration = 15.0f;
     public bool runTransient = true;
     private readonly Dictionary<string, double> _capIcById = new();
     public float lastVoltage = 0f;
