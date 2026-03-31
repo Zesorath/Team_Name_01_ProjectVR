@@ -1,20 +1,44 @@
-﻿using UnityEngine;
+using UnityEngine;
 using SpiceSharp;
 using SpiceSharp.Components;
 
+
 public class LED_Component : CircuitComponentBase
 {
-    [Header("LED Visual Settings")]
+    [Header("Bulb Visual Settings")]
     public Renderer ledRenderer;
-    public Color offColor = Color.black;
-    public Color dimColor = new Color(1f, 0.2f, 0.2f);
-    public Color brightColor = Color.white;
+    public Color offColor     = Color.black;
+    public Color dimColor     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
+    public Color brightColor  = new Color(1f, 0.98f, 0.85f);   // bright warm white
 
     [Header("Electrical Characteristics")]
-    public float forwardVoltage = 1.6f; // Threshold where LED begins lighting
-    public float maxVoltage = 2.5f;     // Max brightness voltage
+    [Tooltip("Bulb resistance in ohms. Controls how bright it glows and how fast the cap discharges.\n" +
+             "Lower R = brighter + faster discharge. Typical range: 100–2000 Ω.\n")]
 
-    private float currentVoltage = 0f;
+    public float resistance = 1000f;
+
+    [Tooltip("Voltage across the bulb that maps to 100 % brightness.")]
+    public float maxVoltage = 5.0f;
+
+    // Used by save system (ObjectState) — keep name/accessor stable
+    public float currentVoltage = 0f;
+    public float CurrentVoltage
+    {
+        get => currentVoltage;
+        set => currentVoltage = value;
+    }
+
+    [Header("UI Display")]
+    public TMPro.TextMeshProUGUI resistanceLabel;
+    public TMPro.TextMeshProUGUI maxVoltageLabel;
+
+    [Header("Runtime Adjustment")]
+    public float resistanceStep  = 100f;
+    public float minResistance   = 10f;
+    public float maxResistance   = 10000f;
+    public float voltageStep     = 0.5f;
+    public float minMaxVoltage   = 0.5f;
+    public float maxMaxVoltage   = 12f;
 
     protected override void Awake()
     {
@@ -23,17 +47,21 @@ public class LED_Component : CircuitComponentBase
             ledRenderer = GetComponentInChildren<Renderer>();
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // SpiceSharp — bulb is a pure resistor; no diode model needed
+    // ─────────────────────────────────────────────────────────────
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        float fakeResistance = 1000f;
-        // Example: treat LED as a test resistor for now
-        string rName = $"R_{componentId}_LED";
-        ckt.Add(new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, fakeResistance));
-
-        Debug.Log($"[LED] Adding TEST resistor for LED between {nodeA} and {nodeB}");
+        string rName = $"R_{componentId}_BULB";
+        var r = new SpiceSharp.Components.Resistor(rName, nodeA, nodeB, resistance);
+        ckt.Add(r);
+        Debug.Log($"[Bulb] {componentId}: {resistance:F0} Ω  ({nodeA} → {nodeB})");
     }
 
-   
+    // ─────────────────────────────────────────────────────────────
+    // Called every simulation step by CircuitManager.
+    // voltageDrop = |V(nodeA) - V(nodeB)|
+    // ─────────────────────────────────────────────────────────────
     public void UpdateLEDState(float voltageDrop)
     {
         currentVoltage = voltageDrop;
@@ -43,32 +71,60 @@ public class LED_Component : CircuitComponentBase
 
         Material mat = ledRenderer.material;
 
-        // OFF behavior
-        if (voltageDrop < forwardVoltage)
+        // Use power (V²) curve so the bulb dims realistically — quickly at first,
+        // holding a warm glow longer before going dark.
+        float linear = Mathf.Clamp01(voltageDrop / maxVoltage);
+        float t = linear * linear; // power curve
+
+        if (t < 0.004f) // ~< 10 % of maxVoltage
         {
+            mat.color = offColor;
             mat.SetColor("_EmissionColor", offColor);
-            ledRenderer.material.color = offColor;
-            Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → OFF");
-            return;
+            Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → OFF");
         }
-
-        // ON behavior — scale brightness
-        float t = Mathf.InverseLerp(forwardVoltage, maxVoltage, voltageDrop);
-        Color finalColor = Color.Lerp(dimColor, brightColor, t);
-
-        ledRenderer.material.color = finalColor;
-        mat.SetColor("_EmissionColor", finalColor * 2f); // glow
-
-        Debug.Log($"[LED] {componentId}: {voltageDrop:F3} V → ON ({t:P0})");
-    }
-    public float CurrentVoltage
-    {
-        get { return currentVoltage; }
-        set
+        else
         {
-            currentVoltage = value;
-            UpdateLEDState(currentVoltage);
+            Color c = Color.Lerp(dimColor, brightColor, t);
+            mat.color = c;
+            // HDR emission so the bulb actually glows in the scene
+            mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 4f));
+            Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → {t * 100f:F0}%");
         }
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // VR runtime controls
+    // ─────────────────────────────────────────────────────────────
+
+    public void IncrementResistance()
+    {
+        resistance = Mathf.Clamp(resistance + resistanceStep, minResistance, maxResistance);
+        if (resistanceLabel != null)
+            resistanceLabel.text = $"R: {resistance:F0} Ω";
+        CircuitManager.Instance.NotifyConnectionChanged();
+    }
+
+    public void DecrementResistance()
+    {
+        resistance = Mathf.Clamp(resistance - resistanceStep, minResistance, maxResistance);
+        if (resistanceLabel != null)
+            resistanceLabel.text = $"R: {resistance:F0} Ω";
+        CircuitManager.Instance.NotifyConnectionChanged();
+    }
+
+    public void IncrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage + voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1} V";
+        UpdateLEDState(currentVoltage);
+    }
+
+    public void DecrementMaxVoltage()
+    {
+        maxVoltage = Mathf.Clamp(maxVoltage - voltageStep, minMaxVoltage, maxMaxVoltage);
+        if (maxVoltageLabel != null)
+            maxVoltageLabel.text = $"Vmax: {maxVoltage:F1} V";
+        UpdateLEDState(currentVoltage);
+    }
 }

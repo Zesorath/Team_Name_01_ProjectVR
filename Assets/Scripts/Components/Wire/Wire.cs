@@ -16,6 +16,8 @@ public class Wire : MonoBehaviour
     public PortSocketBinder portA => portStart;
     public PortSocketBinder portB => portEnd;
 
+
+
     private void Awake()
     {
         if (startpoint != null)
@@ -33,6 +35,7 @@ public class Wire : MonoBehaviour
             endpoint.OnGrabEnd += HandleGrabEnd;
         }
     }
+
 
     public (CircuitComponentBase, CircuitComponentBase) GetConnectionPair()
     {

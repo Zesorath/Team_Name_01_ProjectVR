@@ -9,10 +9,15 @@ public class WireEnd : MonoBehaviour
     [HideInInspector] public string endLabel = "?";
     public event Action<WireEnd> OnGrabStart;
     public event Action<WireEnd> OnGrabEnd;
+
     private MoveMode currentMoveMode = MoveMode.None;
     private bool isGrabbed = false;
     private Transform grabTarget;
     private UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable grabInteractable;
+
+    // So the parent's ComponentID is still reachable when un-parented from wire
+    // on grab
+    public ComponentID parentCID;
 
     private void Awake()
     {
