@@ -59,13 +59,6 @@ public class ComponentTypes
             typeCounters[i] = maxTypeIndices[i];
     }
 
-    // Resets all counters to 0
-    public void ResetTypeCounters()
-    {
-        for (int i = 0; i < (int)Types.TYPES_COUNT; i++)
-            typeCounters[i] = 0;
-    }
-
     // Exposes next available index for specified type for label suggestion.
     public int GetNextTypeIndex(Types type) {return ++typeCounters[(int)type];}
 

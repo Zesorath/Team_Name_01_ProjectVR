@@ -1,5 +1,4 @@
 // SaveButtonHandler.cs
-using System;
 using UnityEngine;
 
 /// <summary>
@@ -11,43 +10,17 @@ using UnityEngine;
 public class SaveButtonHandler : MonoBehaviour
 {
     // No need for Awake/Start; this is simply a bridge to SaveManager.
-    SaveManager sm = SaveManager.Instance;
-    [NonSerialized] readonly SaveDebug d = 
-        new SaveDebug("<color=#1976D2>[SaveButtonManager] </color>");
 
-
-    // Calls SaveManager.Save()--DON'T NEED. Don't use the raw Save() function
+    // Calls SaveManager.Save()
     public void OnSave()
     {
-        d.Error("PLAIN Save() IS NOW PRIVATE.");
+        SaveManager.Instance.Save();
     }
 
-    // Save the current scene's state
+    // Shortcut that calls SaveManager.QuickSave()
     public void OnQuickSave()
     {
-        sm.QuickSave();
-    }
-
-    public void OnSaveToSlot(int slotNo)
-    {
-        // TODO: Confirmation dialog to overwrite. For now, just don't allow it
-        if (!sm.man.SlotIsEmpty(slotNo))
-            { d.Warn("Slot overwrite NOT YET SUPPORTED"); return; }
-        
-        // TODO: Lessons/Sandbox game mode selection, when/if sandbox exists
-
-        sm.SaveToSlot(slotNo);
-    }
-
-    // Calls SaveManager.QuickLoad() ï¿½ loads the last saved file recorded in the manifest
-    public void OnQuickLoad()
-    {
-        sm.QuickLoad();
-    }
-
-    public void OnLoadFromSlot(int slotNo)
-    {
-        sm.LoadFromSlot(slotNo);
+        SaveManager.Instance.QuickSave();
     }
 
     // Calls SaveManager.Load with a filename parameter (e.g. "GUID.json")
@@ -55,15 +28,17 @@ public class SaveButtonHandler : MonoBehaviour
     // accepts a string and type the filename in the inspector field.
     public void OnLoadByFilename(string filename)
     {
-        d.Error("PLAIN Load() IS NOW PRIVATE.");
-        
-        // if (string.IsNullOrEmpty(filename))
-        // {
-        //     Debug.LogWarning("[SaveButtonHandler] Empty filename supplied to OnLoadByFilename.");
-        //     return;
-        // }
-        // sm.Load(filename);
+        if (string.IsNullOrEmpty(filename))
+        {
+            Debug.LogWarning("[SaveButtonHandler] Empty filename supplied to OnLoadByFilename.");
+            return;
+        }
+        SaveManager.Instance.Load(filename);
     }
 
-
+    // Calls SaveManager.QuickLoad() — loads the last saved file recorded in the manifest
+    public void OnQuickLoad()
+    {
+        SaveManager.Instance.QuickLoad();
+    }
 }

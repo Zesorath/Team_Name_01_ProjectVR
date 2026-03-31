@@ -5,15 +5,6 @@ using UnityEngine;
 [Serializable]
 public class SaveData : ISerializationCallbackReceiver
 {
-    [NonSerialized]
-    SaveDebug d;
-    SaveDebug D()
-    {
-        if (d == null)
-            d = new SaveDebug("<color=#1565C0>[SaveData] </color>");
-        return d;
-    }
-    
     public Guid saveID = Guid.NewGuid();
     public Dictionary<Guid, ObjectState> objectStates = 
         new Dictionary<Guid, ObjectState>();
@@ -29,26 +20,10 @@ public class SaveData : ISerializationCallbackReceiver
     // Serializable format for objectStates
     [SerializeField] private List<Entry> states_serial = new List<Entry>();
 
-    public SaveData() {}
-
-    // Returns a deep copy of other
-    public SaveData(SaveData other)
-    {
-        string other_serial = JsonUtility.ToJson(other);
-        JsonUtility.FromJsonOverwrite(other_serial, this);
-    }
-
-    // Empty the current SaveData object
-    public void Reset()
-    {
-        objectStates.Clear();
-        states_serial.Clear();
-    }
-
     // SaveData -> serializable
     public void OnBeforeSerialize()
     {
-        D().Log("OnBeforeSerialize firing");
+        Log("OnBeforeSerialize firing");
 
         states_serial.Clear();
         foreach (var kvp in objectStates)
@@ -58,13 +33,13 @@ public class SaveData : ISerializationCallbackReceiver
             );
         }
 
-        D().Success($"SERIALIZED {states_serial.Count} objects");
+        Success($"SERIALIZED {states_serial.Count} objects");
     }
 
     // Serializable -> SaveData
     public void OnAfterDeserialize()
     {
-        D().Log("OnAfterDeserialize firing");
+        Log("OnAfterDeserialize firing");
 
         objectStates.Clear();
         foreach (var s in states_serial)
@@ -72,6 +47,18 @@ public class SaveData : ISerializationCallbackReceiver
             objectStates.Add( Guid.Parse(s.id), s.state );
         }
 
-        D().Success($"DESERIALIZED {objectStates.Count} objects");
+        Success($"DESERIALIZED {objectStates.Count} objects");
     }
+
+    // Debug output
+    string splash = 
+        $"{SaveManager.sysSplash}<color=#1565C0>[SaveData] </color>";
+
+    void Log(string msg) { Debug.Log($"{splash}{msg}"); }
+    void Success(string msg) 
+        { Debug.Log($"{splash}<color=green>{msg}</color>"); }
+    void Warn(string msg) 
+        { Debug.LogWarning($"{splash}<color=yellow>{msg}</color>"); }
+    void Error(string msg) 
+        { Debug.LogError($"{splash}<color=#B71C1C>{msg}</color>"); }
 }

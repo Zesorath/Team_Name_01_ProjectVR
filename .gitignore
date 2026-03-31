@@ -99,6 +99,3 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 Assets/XR/AndroidXR/AndroidXRSettingsInitializer
-Assets/XR/AndroidXR/AndroidXRSettingsInitializer
-ProjectSettings/Packages/com.unity.learn.iet-framework/Settings.json
-ProjectSettings/Packages/com.unity.testtools.codecoverage/Settings.json
