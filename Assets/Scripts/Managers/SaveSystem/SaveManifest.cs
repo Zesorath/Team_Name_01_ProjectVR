@@ -54,4 +54,12 @@ public class SaveManifest
     public SaveSlot GetActiveSlot() { return slots[lastSlotUsed]; }
 
     public bool SlotIsEmpty(int slotNo) { return slots[slotNo-1].isEmpty; }
+
+    public string GetSlotDisplay(int slotNo) {
+        return slots[slotNo-1].Get_Display();
+    }
+
+    public string GetSlotLastUsed(int slotNo) {
+        return slots[slotNo-1].Get_WhenLastUsed_formatted();
+    }
 }

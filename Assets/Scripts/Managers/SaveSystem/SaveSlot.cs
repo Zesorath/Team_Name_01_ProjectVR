@@ -61,7 +61,7 @@ public class SaveSlot
     }
 
     public string Get_LevelData() { return level; }
-
+    public string Get_Display() {return display; }
 
     public void Capture_WhenLastUsed()
     {
