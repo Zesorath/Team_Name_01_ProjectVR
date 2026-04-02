@@ -12,9 +12,24 @@ public class SaveButtonHandler : MonoBehaviour
 {
     // No need for Awake/Start; this is simply a bridge to SaveManager.
     SaveManager sm = SaveManager.Instance;
+    UndoManager um = UndoManager.Instance;
     [NonSerialized] readonly SaveDebug d = 
         new SaveDebug("<color=#1976D2>[SaveButtonManager] </color>");
 
+    public void Undo()
+    {
+        um.Undo();
+    }
+
+    public void Redo()
+    {
+        um.Redo();
+    }
+
+    public void Continue()
+    {
+        sm.Continue();
+    }
 
     // Calls SaveManager.Save()--DON'T NEED. Don't use the raw Save() function
     public void OnSave()

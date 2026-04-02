@@ -1753,6 +1753,14 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 4468378938669293253, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 4750250564203301383, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_IsActive
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 5433726532244841967, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
       propertyPath: m_Name
       value: Workshop
