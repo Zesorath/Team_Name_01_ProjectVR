@@ -10,6 +10,9 @@ public class LED_Component : CircuitComponentBase
     public Color offColor     = Color.black;
     public Color dimColor     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
     public Color brightColor  = new Color(1f, 0.98f, 0.85f);   // bright warm white
+    public Color dimColor_filament     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
+    public Color brightColor_filament  = new Color(1f, 0.98f, 0.85f);   // bright warm white
+    public Light lightSource;
 
     [Header("Electrical Characteristics")]
     [Tooltip("Bulb resistance in ohms. Controls how bright it glows and how fast the cap discharges.\n" +
@@ -43,8 +46,7 @@ public class LED_Component : CircuitComponentBase
     protected override void Awake()
     {
         base.Awake();
-        if (!ledRenderer)
-            ledRenderer = GetComponentInChildren<Renderer>();
+        UpdateLEDState(0);
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -80,12 +82,15 @@ public class LED_Component : CircuitComponentBase
         {
             mat.color = offColor;
             mat.SetColor("_EmissionColor", offColor);
+            lightSource.color = offColor;
             Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → OFF");
         }
         else
         {
             Color c = Color.Lerp(dimColor, brightColor, t);
-            mat.color = c;
+            lightSource.color = c;
+            Color c2 = Color.Lerp(dimColor_filament, brightColor_filament, t);
+            mat.color = c2;
             // HDR emission so the bulb actually glows in the scene
             mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 4f));
             Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → {t * 100f:F0}%");

@@ -93,7 +93,7 @@ LightmapSettings:
     m_ExportTrainingData: 0
     m_TrainingDataDestination: TrainingData
     m_LightProbeSampleCountMultiplier: 4
-  m_LightingDataAsset: {fileID: 112000000, guid: babed66f44e8b5445b185fac4e02e130, type: 2}
+  m_LightingDataAsset: {fileID: 112000000, guid: df45c705712f3f5448ce010e37bc392b, type: 2}
   m_LightingSettings: {fileID: 4890085278179872738, guid: 78151f5e58fb9f749bd5225f789faa27, type: 2}
 --- !u!196 &4
 NavMeshSettings:
@@ -146,7 +146,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 60909862}
   serializedVersion: 2
-  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 3, y: 0.1, z: 3}
   m_ConstrainProportionsScale: 0
@@ -187,7 +187,7 @@ MeshRenderer:
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
   m_MotionVectors: 1
-  m_LightProbeUsage: 1
+  m_LightProbeUsage: 0
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
@@ -949,7 +949,7 @@ MeshRenderer:
   m_DynamicOccludee: 1
   m_StaticShadowCaster: 0
   m_MotionVectors: 1
-  m_LightProbeUsage: 1
+  m_LightProbeUsage: 0
   m_ReflectionProbeUsage: 1
   m_RayTracingMode: 2
   m_RayTraceProcedural: 0
@@ -1395,6 +1395,10 @@ PrefabInstance:
     - target: {fileID: 4865737222584803362, guid: 817914a07a8b6ef47a9ee81c6cd7e2ed, type: 3}
       propertyPath: m_Name
       value: LessonBoard
+      objectReference: {fileID: 0}
+    - target: {fileID: 4865737222584803362, guid: 817914a07a8b6ef47a9ee81c6cd7e2ed, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5699668420409954982, guid: 817914a07a8b6ef47a9ee81c6cd7e2ed, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2856,6 +2860,10 @@ PrefabInstance:
     - target: {fileID: 1351049382194109983, guid: 3366adefc35532143989e71c69dbb831, type: 3}
       propertyPath: m_Name
       value: Multimeter
+      objectReference: {fileID: 0}
+    - target: {fileID: 1351049382194109983, guid: 3366adefc35532143989e71c69dbb831, type: 3}
+      propertyPath: m_IsActive
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7572957989148750366, guid: 3366adefc35532143989e71c69dbb831, type: 3}
       propertyPath: m_LocalPosition.x
