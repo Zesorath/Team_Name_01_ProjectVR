@@ -191,7 +191,18 @@ public class SaveManager
         // Enter level 1. Scene-change listener will update the active level and
         // ensure an empty state with the new SaveID. Then, scene-loaded
         // listener will load from the save file
-        SceneManager.LoadScene("Lesson 1");
+        
+//******************************************************************************
+//                               FOR TESTING
+//******************************************************************************        
+        // Roll a random number between 1 and 4
+        int lessonNo = UnityEngine.Random.Range(1,5);
+        SceneManager.LoadScene($"Lesson {lessonNo}");
+
+//******************************************************************************
+//                          RESTORE AFTER TESTING
+//******************************************************************************
+        // SceneManager.LoadScene("Lesson 1");
     }
 
     // Serialize and write to file
