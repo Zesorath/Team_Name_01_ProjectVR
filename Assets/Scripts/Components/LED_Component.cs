@@ -8,8 +8,6 @@ public class LED_Component : CircuitComponentBase
     [Header("Bulb Visual Settings")]
     public Renderer ledRenderer;
     public Color offColor     = Color.black;
-    public Color dimColor     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
-    public Color brightColor  = new Color(1f, 0.98f, 0.85f);   // bright warm white
     public Color dimColor_filament     = new Color(1f, 0.55f, 0.05f);   // dim warm orange
     public Color brightColor_filament  = new Color(1f, 0.98f, 0.85f);   // bright warm white
     public Light lightSource;
@@ -87,12 +85,12 @@ public class LED_Component : CircuitComponentBase
         }
         else
         {
-            Color c = Color.Lerp(dimColor, brightColor, t);
-            lightSource.color = c;
+            float c = Mathf.Lerp(0, 0.05f, t);
+            lightSource.intensity = c;
             Color c2 = Color.Lerp(dimColor_filament, brightColor_filament, t);
             mat.color = c2;
             // HDR emission so the bulb actually glows in the scene
-            mat.SetColor("_EmissionColor", c * Mathf.Pow(2f, t * 4f));
+            mat.SetColor("_EmissionColor", c2 * Mathf.Pow(2f, t * 4f));
             Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → {t * 100f:F0}%");
         }
     }
