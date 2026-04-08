@@ -337,6 +337,11 @@ public class SaveManager
     // LOAD HELPERS
     void Load_ApplyState()
     {
+        // Instead of manually detatching wires for loading, just delete them
+        // all and re-spawn in the right place
+        // foreach (var cID in cIDs.Values)
+        //     if (cID.gameObject.GetComponent<Wire>()) cID.Delete();
+        
         // Sort by delete/update/spawn
         LoadPlan plan = BuildLoadPlan();
         
@@ -364,6 +369,29 @@ public class SaveManager
             updateIDs = liveIDs.Intersect(savedIDs).ToHashSet(),
             spawnIDs = savedIDs.Except(liveIDs).ToHashSet()
         };
+
+        // Apparently I can't just...do this without creating phantom saveData
+        // snapshots in the undo/redo stacks
+
+        // // Live wires: always delete
+        // foreach (var id in liveIDs)
+        // {
+        //     if (cIDs[id].type == ComponentTypes.Types.WIRE)
+        //     {
+        //         p.deleteIDs.Add(id);
+        //         p.updateIDs.Remove(id);
+        //     }
+        // }
+
+        // // Saved wires: always spawn
+        // foreach (var id in savedIDs)
+        // {
+        //     if (saveData.objectStates[id].type == ComponentTypes.Types.WIRE)
+        //     {
+        //         p.spawnIDs.Add(id);
+        //         p.updateIDs.Remove(id);
+        //     }
+        // }
 
         int expD = p.deleteIDs.Count;
         int expU = p.updateIDs.Count;

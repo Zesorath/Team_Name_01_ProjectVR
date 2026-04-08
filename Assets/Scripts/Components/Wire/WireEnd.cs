@@ -83,31 +83,4 @@ public class WireEnd : MonoBehaviour
                 break;
         }
     }
-
-    Vector3 lastPos;
-    Quaternion lastRot;
-    bool initialized = false;
-
-    void LateUpdate()
-    {
-        if (!initialized)
-        {
-            lastPos = transform.position;
-            lastRot = transform.rotation;
-            initialized = true;
-            return;
-        }
-
-        if (transform.position != lastPos || transform.rotation != lastRot)
-        {
-            Debug.Log($"[WireEnd] {name} CHANGED\n" +
-                    $"world pos: {lastPos} -> {transform.position}\n" +
-                    $"world rot: {lastRot.eulerAngles} -> {transform.rotation.eulerAngles}\n" +
-                    $"local pos now: {transform.localPosition}\n" +
-                    $"local rot now: {transform.localRotation.eulerAngles}\n" +
-                    $"parent: {transform.parent?.name}");
-            lastPos = transform.position;
-            lastRot = transform.rotation;
-        }
-    }
 }

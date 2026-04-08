@@ -117,9 +117,6 @@ public class ObjectState
             wire.startpoint.transform.localRotation = wt.startRot;
             wire.endpoint.transform.localPosition = wt.endPos;
             wire.endpoint.transform.localRotation = wt.endRot;
-
-            Debug.Log($"[LOAD] Applied {wire.startpoint.name} world={wire.startpoint.transform.position} local={wire.startpoint.transform.localPosition}");
-            Debug.Log($"[LOAD] Applied {wire.endpoint.name} world={wire.endpoint.transform.position} local={wire.endpoint.transform.localPosition}");
         }
         
         DCSource dc = go.GetComponent<DCSource>();
