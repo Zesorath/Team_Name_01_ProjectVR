@@ -1,4 +1,5 @@
 using UnityEngine;
+using System.Collections;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System;
@@ -343,6 +344,8 @@ public class SaveManager
         int dCt = Load_delete(plan.deleteIDs);
         int uCt = Load_update(plan.updateIDs);
         int sCt = Load_spawn(plan.spawnIDs);
+        Load_fields();
+        Physics.SyncTransforms();
         D().Log($"LOADED: Deleted {dCt} ; Updated {uCt} ; Spawned {sCt}");
 
         // Rebuild type indices from the restored save data
@@ -393,7 +396,7 @@ public class SaveManager
         foreach (var id in uIDs)
         {
             D().Log($"UPDATING component {id}");
-            saveData.objectStates[id].Apply_ObjectState(cIDs[id]);
+            saveData.objectStates[id].Apply_Transform(cIDs[id]);
             uCt++;
         }
 
@@ -443,7 +446,6 @@ public class SaveManager
         cID.id = id;
         cID.label = state.label;
         cID.index = state.index;
-        state.Apply_Fields(cID);
         Register(cID);
 
         return true;
@@ -462,6 +464,15 @@ public class SaveManager
         }
 
         return prefab;
+    }
+
+    void Load_fields()
+    {
+        foreach (var cID in cIDs.Values)
+        {
+            D().Log($"APPLYING FIELD(S) to component {cID.id} ({cID.label})");
+            saveData.objectStates[cID.id].Apply_Fields(cID);
+        }
     }
 
     // GENERAL HELPERS
