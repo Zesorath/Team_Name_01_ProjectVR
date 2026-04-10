@@ -1,6 +1,7 @@
 using UnityEngine;
 using System;
 using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 public class WireEnd : MonoBehaviour
 {
@@ -18,6 +19,9 @@ public class WireEnd : MonoBehaviour
     // So the parent's ComponentID is still reachable when un-parented from wire
     // on grab
     public ComponentID parentCID;
+
+    // Expose grabber so load/undo/redo can detatch it
+    public XRGrabInteractable GetGrabber() { return grabInteractable; }
 
     private void Awake()
     {

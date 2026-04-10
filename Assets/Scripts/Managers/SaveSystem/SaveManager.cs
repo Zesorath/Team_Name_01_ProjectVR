@@ -6,6 +6,9 @@ using System;
 using System.IO;
 using System.Linq;
 using Unity.XR.Management.AndroidManifest.Editor;
+using UnityEngine.XR.Interaction.Toolkit;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
+using UnityEngine.XR.Interaction.Toolkit.Interactors;
 using UnityEngine.SceneManagement;
 [assembly: InternalsVisibleTo("Assembly-CSharp-Editor")]
 
@@ -138,6 +141,7 @@ public class SaveManager
 
     public void QuickSave()
     { 
+        isLoadingOrSaving = true;
         // Do nothing if not inside a level
         if (activeSlot == null)
             { D().Warn("QuickSave() FAILED--No active save slot"); return; }
@@ -158,6 +162,7 @@ public class SaveManager
     // Creates a new save file in the specified save slot
     public void SaveToSlot(int slotNo)
     {
+        isLoadingOrSaving = true;
         // Do nothing if already inside a level
         if (activeSlot != null)
         {
@@ -189,31 +194,27 @@ public class SaveManager
         PendingAction = Save;
         SceneManager.sceneLoaded += OnSceneLoaded;
 
+//******************************************************************************
+//                          RESTORE AFTER TESTING
+//******************************************************************************
         // Enter level 1. Scene-change listener will update the active level and
         // ensure an empty state with the new SaveID. Then, scene-loaded
         // listener will load from the save file
+
+        SceneManager.LoadScene("Lesson 1");
         
 //******************************************************************************
 //                               FOR TESTING
 //******************************************************************************        
         // Roll a random number between 1 and 4
-        int lessonNo = UnityEngine.Random.Range(1,5);
-        SceneManager.LoadScene($"Lesson {lessonNo}");
-
-//******************************************************************************
-//                          RESTORE AFTER TESTING
-//******************************************************************************
-        // SceneManager.LoadScene("Lesson 1");
+        // int lessonNo = UnityEngine.Random.Range(1,5);
+        // SceneManager.LoadScene($"Lesson {lessonNo}");
     }
 
     // Serialize and write to file
     void Save(string path)
     {       
         D().Log("Save() CALLED");
-
-        // TODO: FINISH
-        // Disable interactions while actively saving/loading (currently stub)
-        isLoadingOrSaving = true;
         
         // Capture current state of all registered scene objects
         foreach (ComponentID cID in cIDs.Values)
@@ -233,6 +234,7 @@ public class SaveManager
 
     public void QuickLoad() 
     {
+        isLoadingOrSaving = true;
         // Do nothing if not inside a level
         if (activeSlot == null)
             { D().Error("QuickLoad() FAILED--No active save slot"); return; }
@@ -246,6 +248,7 @@ public class SaveManager
     // Load from the most reccently used save slot
     public void Continue()
     {
+        isLoadingOrSaving = true;
         // Do nothing if already inside a level
         if (activeSlot != null)
         {
@@ -259,6 +262,7 @@ public class SaveManager
 
     public void LoadFromSlot(int slotNo)
     {
+        isLoadingOrSaving = true;
         // Do nothing if the selected slot is empty
         if (man.SlotIsEmpty(slotNo))
         {
@@ -299,6 +303,7 @@ public class SaveManager
 
     struct LoadPlan
     {
+        public List<WireEnd> attachedWireEnds;
         public HashSet<Guid> deleteIDs;
         public HashSet<Guid> updateIDs;
         public HashSet<Guid> spawnIDs;
@@ -316,9 +321,7 @@ public class SaveManager
         JsonUtility.FromJsonOverwrite(saveData_serial, saveData);
 
         // Restore objects and type counters
-        Load_ApplyState();
-
-        isLoadingOrSaving = false;
+        CoroutineRunner.RunCoroutine(Load_ApplyState());
     }
 
     // Just for semantic consistency. Applies state from a SaveData object
@@ -329,69 +332,78 @@ public class SaveManager
 
         // Copy sd into authoritative saveData
         saveData = new SaveData(sd);
-        Load_ApplyState();
-
-        isLoadingOrSaving = false;
+        CoroutineRunner.RunCoroutine(Load_ApplyState());
     }
 
     // LOAD HELPERS
-    void Load_ApplyState()
-    {
-        // Instead of manually detatching wires for loading, just delete them
-        // all and re-spawn in the right place
-        // foreach (var cID in cIDs.Values)
-        //     if (cID.gameObject.GetComponent<Wire>()) cID.Delete();
-        
-        // Sort by delete/update/spawn
-        LoadPlan plan = BuildLoadPlan();
-        
-        // Perform and count deletes/updates/spawns
-        int dCt = Load_delete(plan.deleteIDs);
-        int uCt = Load_update(plan.updateIDs);
-        int sCt = Load_spawn(plan.spawnIDs);
-        Load_fields();
-        Physics.SyncTransforms();
-        D().Log($"LOADED: Deleted {dCt} ; Updated {uCt} ; Spawned {sCt}");
+    IEnumerator Load_ApplyState()
+    {        
+        try {
+            SetAllSocketsEnabled(false);
+            
+            // Sort by delete/update/spawn
+            LoadPlan plan = BuildLoadPlan();
 
-        // Rebuild type indices from the restored save data
-        types.RestoreTypeCounters(saveData);
+            Load_DetatchWires(plan.attachedWireEnds);
+
+            // Wait one frame for detatchment to stabilize
+            yield return null;
+            
+            // Perform and count deletes/updates/spawns
+            int dCt = Load_delete(plan.deleteIDs);
+            int uCt = Load_update(plan.updateIDs);
+            int sCt = Load_spawn(plan.spawnIDs);
+            Load_fields();
+            Physics.SyncTransforms();
+
+            SetAllSocketsEnabled(true);
+
+            D().Log($"LOADED: Deleted {dCt} ; Updated {uCt} ; Spawned {sCt}");
+
+            // Rebuild type indices from the restored save data
+            types.RestoreTypeCounters(saveData);
+        }
+        finally
+        {
+        isLoadingOrSaving = false;
+        }
     }
-    
+
+    void SetAllSocketsEnabled(bool enabled)
+    {
+        XRSocketInteractor[] sockets =
+            UnityEngine.Object.FindObjectsByType<XRSocketInteractor>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None
+            );
+
+        foreach (XRSocketInteractor socket in sockets)
+        {
+            if (socket == null) continue;
+            socket.enabled = enabled;
+        }
+    }
+
     // Place IDs into delete/update/spawn buckets
     LoadPlan BuildLoadPlan()
     {
         var liveIDs = cIDs.Keys.ToHashSet();
         var savedIDs = saveData.objectStates.Keys.ToHashSet();
         
-        LoadPlan p = new LoadPlan
+        LoadPlan p = new LoadPlan{ attachedWireEnds = new List<WireEnd>() };
+
+        foreach (var id in cIDs.Keys)
         {
-            deleteIDs = liveIDs.Except(savedIDs).ToHashSet(),
-            updateIDs = liveIDs.Intersect(savedIDs).ToHashSet(),
-            spawnIDs = savedIDs.Except(liveIDs).ToHashSet()
-        };
+            Wire w = cIDs[id].gameObject.GetComponent<Wire>();
+            if (!w) continue;
 
-        // Apparently I can't just...do this without creating phantom saveData
-        // snapshots in the undo/redo stacks
+            if (w.compStart != null) p.attachedWireEnds.Add(w.startpoint);
+            if (w.compEnd != null) p.attachedWireEnds.Add(w.endpoint);
+        }
 
-        // // Live wires: always delete
-        // foreach (var id in liveIDs)
-        // {
-        //     if (cIDs[id].type == ComponentTypes.Types.WIRE)
-        //     {
-        //         p.deleteIDs.Add(id);
-        //         p.updateIDs.Remove(id);
-        //     }
-        // }
-
-        // // Saved wires: always spawn
-        // foreach (var id in savedIDs)
-        // {
-        //     if (saveData.objectStates[id].type == ComponentTypes.Types.WIRE)
-        //     {
-        //         p.spawnIDs.Add(id);
-        //         p.updateIDs.Remove(id);
-        //     }
-        // }
+        p.deleteIDs = liveIDs.Except(savedIDs).ToHashSet();
+        p.updateIDs = liveIDs.Intersect(savedIDs).ToHashSet();
+        p.spawnIDs = savedIDs.Except(liveIDs).ToHashSet();
 
         int expD = p.deleteIDs.Count;
         int expU = p.updateIDs.Count;
@@ -399,6 +411,37 @@ public class SaveManager
         D().Log($"EXPECTED: Delete {expD} ; Update {expU} ; Spawn {expS}");
 
         return p;
+    }
+
+    void Load_DetatchWires(List<WireEnd> ends)
+    {
+        foreach (var e in ends) DetatchWire(e);
+    }
+
+    // Force anything currently holding the wire end to let go
+    void DetatchWire(WireEnd e)
+    {
+        if (e == null) return;
+        XRGrabInteractable grab = e.GetGrabber();
+        if (grab == null) return;
+
+        // Just an extra guard, but it should be attached, because that's how we
+        // built the input list
+        if (!grab.isSelected) return;
+
+        // So we can have the manager handle detatchment
+        XRInteractionManager manager = grab.interactionManager;
+        if (manager == null) return;
+
+        // Detatch everything holding on to the wire end
+        for (int i = grab.interactorsSelecting.Count - 1; i >= 0; i--)
+        {
+            IXRSelectInteractor interactor = grab.interactorsSelecting[i];
+            if (interactor == null) continue;
+            
+            // This line does the detatchment
+            manager.SelectExit(interactor, grab);
+        }
     }
 
     // Delete objects that are in the current scene but not in the save file
