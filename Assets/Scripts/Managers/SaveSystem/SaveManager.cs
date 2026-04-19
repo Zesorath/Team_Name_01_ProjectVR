@@ -83,7 +83,7 @@ public class SaveManager
     void ClearRuntimeState()
     {
         types.ResetTypeCounters();
-        UndoManager.Instance.Reset();
+        // UndoManager.Instance.Reset();
         cIDs.Clear();
     }
 
@@ -194,21 +194,10 @@ public class SaveManager
         PendingAction = Save;
         SceneManager.sceneLoaded += OnSceneLoaded;
 
-//******************************************************************************
-//                          RESTORE AFTER TESTING
-//******************************************************************************
-        // Enter level 1. Scene-change listener will update the active level and
-        // ensure an empty state with the new SaveID. Then, scene-loaded
-        // listener will load from the save file
-
-        SceneManager.LoadScene("Lesson 1");
-        
-//******************************************************************************
-//                               FOR TESTING
-//******************************************************************************        
-        // Roll a random number between 1 and 4
-        // int lessonNo = UnityEngine.Random.Range(1,5);
-        // SceneManager.LoadScene($"Lesson {lessonNo}");
+        // Enter the slot's level. Scene-change listener will update the active
+        // level and ensure an empty state with the new SaveID. Then,
+        // scene-loaded listener will load from the save file
+        SceneManager.LoadScene($"Lesson {slotNo}");
     }
 
     // Serialize and write to file
@@ -241,8 +230,16 @@ public class SaveManager
         
         D().Log($"QuickLoading from slot {man.GetLastSlotNo()}");
 
-        UndoManager.Instance.Reset();
-        LoadFrom_file(activeSlot.Get_FilePath());
+        // UndoManager.Instance.Reset();
+
+        // Set up listener for scene to finish loading.
+        PendingAction = LoadFrom_file;
+        SceneManager.sceneLoaded += OnSceneLoaded;
+
+        // Begin loading the scene. Scene-change listener will update the active
+        // level and ensure empty state, then Scene-loaded listener will load
+        // from the save file
+        SceneManager.LoadScene(activeSlot.Get_LevelData());
     }
 
     // Load from the most reccently used save slot
@@ -252,11 +249,17 @@ public class SaveManager
         // Do nothing if already inside a level
         if (activeSlot != null)
         {
-            D().Error($"Continue() FAILED--a save slot is already active");
+            D().Error("Continue() FAILED--a save slot is already active");
             return;
         }
 
         int slotNo = man.GetLastSlotNo();
+        if (slotNo == 0)
+        {
+            // Enter level 1, or just announce and go to level select?
+            // Or some secret third option? Or just nothing?
+            D().Warn("Continue() FAILED--No continue file");
+        }
         LoadFromSlot(slotNo);
     }
 
@@ -274,7 +277,7 @@ public class SaveManager
         if (activeSlot != null)
             // Seeing this from Continue() means something has gone wrong
         {
-            D().Error($"SaveToSlot({slotNo}) FAILED--slot already active");
+            D().Error($"LoadFromSlot({slotNo}) FAILED--slot already active");
             return;
         }
 
@@ -544,6 +547,22 @@ public class SaveManager
             D().Log($"APPLYING FIELD(S) to component {cID.id} ({cID.label})");
             saveData.objectStates[cID.id].Apply_Fields(cID);
         }
+    }
+
+    // Other menu commands
+
+    public void EnterLesson(int lessonNo)
+    {
+        if (man.SlotIsEmpty(lessonNo)) SaveToSlot(lessonNo);
+        else LoadFromSlot(lessonNo);
+    }
+
+    public void ResetScene()
+    {
+        // Clear the scene, but don't save to allow reverting to the last
+        // quicksave after reset
+        SceneManager.LoadScene(activeSlot.Get_LevelData());
+        Reset_sameID();        
     }
 
     // GENERAL HELPERS
