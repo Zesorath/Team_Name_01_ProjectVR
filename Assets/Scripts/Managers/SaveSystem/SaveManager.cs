@@ -256,9 +256,9 @@ public class SaveManager
         int slotNo = man.GetLastSlotNo();
         if (slotNo == 0)
         {
-            // Enter level 1, or just announce and go to level select?
-            // Or some secret third option? Or just nothing?
             D().Warn("Continue() FAILED--No continue file");
+            SceneManager.LoadScene("Starting Menu");
+            return;
         }
         LoadFromSlot(slotNo);
     }
@@ -553,6 +553,7 @@ public class SaveManager
 
     public void EnterLesson(int lessonNo)
     {
+        man.SetActiveSlotNo(lessonNo);
         if (man.SlotIsEmpty(lessonNo)) SaveToSlot(lessonNo);
         else LoadFromSlot(lessonNo);
     }
