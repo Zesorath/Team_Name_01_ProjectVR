@@ -13,7 +13,7 @@ public class SaveManifest
     public SaveManifest()
     {
         // Create empty slots with default values
-        slots = new SaveSlot[5];
+        slots = new SaveSlot[6];
         for (int i = 0; i < slots.Length; i++) slots[i] = new SaveSlot();
     }
 
