@@ -166,7 +166,7 @@ public class ComponentID : MonoBehaviour
         SaveManager.Instance.CaptureLiveState();
 
         // Push snapshot to the undo stack
-        UndoManager.Instance.Do();
+        // UndoManager.Instance.Do();
     }
 
     // Subscribe to grab listener on Awake()

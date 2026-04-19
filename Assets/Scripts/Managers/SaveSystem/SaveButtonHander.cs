@@ -15,15 +15,19 @@ public class SaveButtonHandler : MonoBehaviour
     UndoManager um = UndoManager.Instance;
     [NonSerialized] readonly SaveDebug d = 
         new SaveDebug("<color=#1976D2>[SaveButtonManager] </color>");
+    [NonSerialized] readonly UndoDebug u = 
+        new UndoDebug("<color=#1976D2>[SaveButtonManager] </color>");
 
     public void Undo()
     {
-        um.Undo();
+        u.Error("No more undo");
+        // um.Undo();
     }
 
     public void Redo()
     {
-        um.Redo();
+        u.Error("No more redo");
+        // um.Redo();
     }
 
     public void Continue()
