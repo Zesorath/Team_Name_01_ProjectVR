@@ -5,10 +5,6 @@ public class GameManager : MonoBehaviour
 {
     //[SerializeField] private string openLessonName;
 
-    public void ReloadCurrentScene()
-    {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
-    }
     public void Tutorial()
     {
         SceneManager.LoadScene(1);
@@ -41,7 +37,7 @@ public class GameManager : MonoBehaviour
         SceneManager.LoadScene(7);
     }
 
-        public static void ExitGame()
+    public static void ExitGame()
     {
     #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
