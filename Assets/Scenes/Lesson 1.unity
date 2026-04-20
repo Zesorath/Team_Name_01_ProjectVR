@@ -1825,6 +1825,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: Workshop
       objectReference: {fileID: 0}
+    - target: {fileID: 6749256027576142413, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
+      propertyPath: m_text
+      value: Main Menu
+      objectReference: {fileID: 0}
     - target: {fileID: 7775195922596776440, guid: 9c4b6ad994e7e3b479ad2bde290f9023, type: 3}
       propertyPath: m_Name
       value: UI
