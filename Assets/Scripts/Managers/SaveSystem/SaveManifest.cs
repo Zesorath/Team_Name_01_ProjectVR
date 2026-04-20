@@ -13,13 +13,13 @@ public class SaveManifest
     public SaveManifest()
     {
         // Create empty slots with default values
-        slots = new SaveSlot[5];
+        slots = new SaveSlot[6];
         for (int i = 0; i < slots.Length; i++) slots[i] = new SaveSlot();
     }
 
     public void ActivateSaveSlot_empty(int slotNo, SaveData sd)
     {
-        SetActiveSlotNo(slotNo);
+        lastSlotUsed = slotNo;
         SaveSlot curr = GetActiveSlot();
         curr.MarkNotEmpty();
         curr.Capture_SaveFilePath(sd);
@@ -28,7 +28,7 @@ public class SaveManifest
 
     public void ActivateSaveSlot_occupied(int slotNo)
     {
-        SetActiveSlotNo(slotNo);
+        lastSlotUsed = slotNo;
 
         SaveSlot curr = GetActiveSlot();
         curr.Capture_WhenLastUsed();
@@ -47,11 +47,11 @@ public class SaveManifest
         curr.MakeEmpty();
     }
 
-    public void SetActiveSlotNo(int slotNo) { lastSlotUsed = slotNo - 1; }
+    public void SetActiveSlotNo(int slotNo) { lastSlotUsed = slotNo; }
 
-    public int GetLastSlotNo() { return lastSlotUsed + 1; }
+    public int GetLastSlotNo() { return lastSlotUsed; }
 
-    public SaveSlot GetActiveSlot() { return slots[lastSlotUsed]; }
+    public SaveSlot GetActiveSlot() { return slots[lastSlotUsed-1]; }
 
     public bool SlotIsEmpty(int slotNo) { return slots[slotNo-1].isEmpty; }
 

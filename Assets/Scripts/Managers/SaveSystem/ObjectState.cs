@@ -59,10 +59,10 @@ public class ObjectState
         Wire wire = go.GetComponent<Wire>();
         if (wire)
         {
-            wt.startPos = wire.startpoint.transform.position;
-            wt.startRot = wire.startpoint.transform.rotation;
-            wt.endPos = wire.endpoint.transform.position;
-            wt.endRot = wire.endpoint.transform.rotation;
+            wt.startPos = wire.startpoint.transform.localPosition;
+            wt.startRot = wire.startpoint.transform.localRotation;
+            wt.endPos = wire.endpoint.transform.localPosition;
+            wt.endRot = wire.endpoint.transform.localRotation;
         }
 
         DCSource dc = go.GetComponent<DCSource>();
@@ -81,10 +81,7 @@ public class ObjectState
     public void Apply_ObjectState(ComponentID cID)
     {
         if (cID == null) 
-        {
-            D().Error($"APPLY STATE FAILED--no ComponentID");
-            return;
-        }
+        { D().Error($"APPLY STATE FAILED--no ComponentID"); return; }
 
         D().Log($"APPLYING saved state to component {cID.id} ({cID.label})");
 
@@ -95,8 +92,11 @@ public class ObjectState
         D().Success($"{cID.id} ({cID.label}) state APPLIED");
     }
 
-    void Apply_Transform(Component cID)
+    public void Apply_Transform(Component cID)
     {
+        if (cID == null) 
+        { D().Error($"APPLY TRANSFORM FAILED--no ComponentID"); return; }
+        
         GameObject go = cID.gameObject;
 
         go.transform.position = position;
@@ -105,17 +105,20 @@ public class ObjectState
 
     public void Apply_Fields(ComponentID cID)
     {
+        if (cID == null) 
+        { D().Error($"APPLY FIELDS FAILED--no ComponentID"); return; }
+        
         GameObject go = cID.gameObject;
 
         Wire wire = go.GetComponent<Wire>();
         if (wire)
         {
-            wire.startpoint.transform.position = wt.startPos;
-            wire.startpoint.transform.rotation = wt.startRot;
-            wire.endpoint.transform.position = wt.endPos;
-            wire.endpoint.transform.rotation = wt.endRot;
+            wire.startpoint.transform.localPosition = wt.startPos;
+            wire.startpoint.transform.localRotation = wt.startRot;
+            wire.endpoint.transform.localPosition = wt.endPos;
+            wire.endpoint.transform.localRotation = wt.endRot;
         }
-
+        
         DCSource dc = go.GetComponent<DCSource>();
         if (dc != null) { dc.voltage = voltage; }
 

@@ -80,12 +80,12 @@ public class LED_Component : CircuitComponentBase
         {
             mat.color = offColor;
             mat.SetColor("_EmissionColor", offColor);
-            lightSource.color = offColor;
+            lightSource.intensity = 0;
             Debug.Log($"[Bulb] {componentId}: {voltageDrop:F3} V → OFF");
         }
         else
         {
-            float c = Mathf.Lerp(0, 0.05f, t);
+            float c = Mathf.Lerp(0, 0.5f, t);
             lightSource.intensity = c;
             Color c2 = Color.Lerp(dimColor_filament, brightColor_filament, t);
             mat.color = c2;

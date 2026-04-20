@@ -1,6 +1,7 @@
 // SaveButtonHandler.cs
 using System;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Attach this to a GameObject (for example, an "UI Manager" GameObject)
@@ -15,15 +16,19 @@ public class SaveButtonHandler : MonoBehaviour
     UndoManager um = UndoManager.Instance;
     [NonSerialized] readonly SaveDebug d = 
         new SaveDebug("<color=#1976D2>[SaveButtonManager] </color>");
+    [NonSerialized] readonly UndoDebug u = 
+        new UndoDebug("<color=#1976D2>[SaveButtonManager] </color>");
 
     public void Undo()
     {
-        um.Undo();
+        u.Error("No more undo");
+        // um.Undo();
     }
 
     public void Redo()
     {
-        um.Redo();
+        u.Error("No more redo");
+        // um.Redo();
     }
 
     public void Continue()
@@ -45,13 +50,7 @@ public class SaveButtonHandler : MonoBehaviour
 
     public void OnSaveToSlot(int slotNo)
     {
-        // TODO: Confirmation dialog to overwrite. For now, just don't allow it
-        if (!sm.man.SlotIsEmpty(slotNo))
-            { d.Warn("Slot overwrite NOT YET SUPPORTED"); return; }
-        
-        // TODO: Lessons/Sandbox game mode selection, when/if sandbox exists
-
-        sm.SaveToSlot(slotNo);
+        sm.EnterLesson(slotNo);
     }
 
     // Calls SaveManager.QuickLoad() � loads the last saved file recorded in the manifest
@@ -62,7 +61,8 @@ public class SaveButtonHandler : MonoBehaviour
 
     public void OnLoadFromSlot(int slotNo)
     {
-        sm.LoadFromSlot(slotNo);
+        SceneManager.LoadScene("ExitScene");
+        // sm.LoadFromSlot(slotNo);
     }
 
     // Calls SaveManager.Load with a filename parameter (e.g. "GUID.json")
