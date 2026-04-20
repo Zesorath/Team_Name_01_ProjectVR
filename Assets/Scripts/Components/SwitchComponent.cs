@@ -13,6 +13,9 @@ public class SwitchComponent : CircuitComponentBase
     [Header("Handle Interactable (top cylinder)")]
     [SerializeField] private XRBaseInteractable handleInteractable;
 
+
+    public Animator animator;
+
     protected override void Awake()
     {
         base.Awake();
@@ -69,6 +72,7 @@ public class SwitchComponent : CircuitComponentBase
         isClosed = !isClosed;
         Debug.Log($"[SWITCH][TOGGLE] {componentId}: {old} -> {isClosed}");
         CircuitManager.Instance?.NotifyConnectionChanged();
+        animator.SetTrigger("Switch");
     }
 
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
