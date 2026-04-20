@@ -6,8 +6,10 @@ public class ItemSpawner : MonoBehaviour
 
     public GameObject Item_To_Spawn;
     public float Respawn_Radius;
+    public float Respawn_Delay;
 
     private GameObject LastItem;
+    private float SpawnTimer;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -28,7 +30,12 @@ public class ItemSpawner : MonoBehaviour
         
         if ( (LastItem.transform.position-this.transform.position).magnitude > Respawn_Radius )
         {
-            Spawn();
+            SpawnTimer += Time.deltaTime;
+            if (SpawnTimer > Respawn_Delay)
+            {
+                Spawn();
+                SpawnTimer = 0;
+            }
         }
     }
 
