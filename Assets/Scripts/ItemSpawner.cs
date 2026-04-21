@@ -16,6 +16,10 @@ public class ItemSpawner : MonoBehaviour
     {
         Spawn();
         transform.GetChild(0).GetComponent<TextMeshPro>().text = Item_To_Spawn.name;
+        if (Item_To_Spawn.name.Equals("DIRECT_CURRENT"))
+        {
+            transform.GetChild(0).GetComponent<TextMeshPro>().text = "BATTERY";
+        }
     }
 
     // Update is called once per frame
