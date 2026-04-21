@@ -17,4 +17,4 @@
 *.shadergraph filter=lfs diff=lfs merge=lfs -text
 
 # TMP built-in text assets — keep as plain YAML, never LFS, never binary-merge
-Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset !filter !diff !merge text
+"Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset" !filter !diff !merge text
