@@ -80,5 +80,23 @@ public class SaveButtonHandler : MonoBehaviour
         // sm.Load(filename);
     }
 
+    public void EnterLesson(int i)
+    {
+        sm.EnterLesson(i);
+    }
 
+    public void ResetScene()
+    {
+        sm.ResetScene();
+    }
+
+    public void QuitGame()
+    {
+        GameManager.ExitGame();
+    }
+
+    public void LoadMainMenu()
+    {
+        //SceneManager.LoadScene("Starting Menu");
+    }
 }
