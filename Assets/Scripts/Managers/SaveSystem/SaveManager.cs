@@ -566,6 +566,17 @@ public class SaveManager
         Reset_sameID();        
     }
 
+    public void BackToMain()
+    {
+        // Do nothing if not inside a level
+        if (activeSlot == null)
+            { D().Error($"BackToMain() FAILED--no slot active"); return; }
+
+        QuickSave();
+        activeSlot = null;
+        SceneManager.LoadScene("Starting Menu");
+    }
+
     // GENERAL HELPERS
 
     void WriteJsonToFile(string path, string jsonData)

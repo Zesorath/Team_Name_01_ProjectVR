@@ -13,7 +13,6 @@ public class SaveButtonHandler : MonoBehaviour
 {
     // No need for Awake/Start; this is simply a bridge to SaveManager.
     SaveManager sm = SaveManager.Instance;
-    UndoManager um = UndoManager.Instance;
     [NonSerialized] readonly SaveDebug d = 
         new SaveDebug("<color=#1976D2>[SaveButtonManager] </color>");
     [NonSerialized] readonly UndoDebug u = 
@@ -22,13 +21,11 @@ public class SaveButtonHandler : MonoBehaviour
     public void Undo()
     {
         u.Error("No more undo");
-        // um.Undo();
     }
 
     public void Redo()
     {
         u.Error("No more redo");
-        // um.Redo();
     }
 
     public void Continue()
@@ -62,7 +59,6 @@ public class SaveButtonHandler : MonoBehaviour
     public void OnLoadFromSlot(int slotNo)
     {
         SceneManager.LoadScene("ExitScene");
-        // sm.LoadFromSlot(slotNo);
     }
 
     // Calls SaveManager.Load with a filename parameter (e.g. "GUID.json")
@@ -71,13 +67,6 @@ public class SaveButtonHandler : MonoBehaviour
     public void OnLoadByFilename(string filename)
     {
         d.Error("PLAIN Load() IS NOW PRIVATE.");
-        
-        // if (string.IsNullOrEmpty(filename))
-        // {
-        //     Debug.LogWarning("[SaveButtonHandler] Empty filename supplied to OnLoadByFilename.");
-        //     return;
-        // }
-        // sm.Load(filename);
     }
 
     public void EnterLesson(int i)
@@ -97,6 +86,6 @@ public class SaveButtonHandler : MonoBehaviour
 
     public void LoadMainMenu()
     {
-        //SceneManager.LoadScene("Starting Menu");
+        sm.BackToMain();
     }
 }
