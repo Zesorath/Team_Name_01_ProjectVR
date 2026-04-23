@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
 using SpiceSharp;
@@ -10,56 +11,105 @@ public class SwitchComponent : CircuitComponentBase
     [SerializeField] private bool isClosed = false;
     public bool IsClosed => isClosed;
 
-    [Header("Handle Interactable (top cylinder)")]
-    [SerializeField] private XRBaseInteractable handleInteractable;
+    public Animator animator;
+
+    [Header("Trigger Input Actions")]
+    [Tooltip("Drag in the Left Hand / Activate action from your XRI Input Action Asset")]
+    [SerializeField] private InputActionReference leftActivateAction;
+    [Tooltip("Drag in the Right Hand / Activate action from your XRI Input Action Asset")]
+    [SerializeField] private InputActionReference rightActivateAction;
+
+    [Tooltip("Seconds before the switch can be toggled again (prevents double-fire)")]
+    [SerializeField] private float toggleCooldown = 0.3f;
+    private float lastToggleTime = -999f;
+
+    private UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable grabInteractable;
+    private bool isHovered = false;
 
     protected override void Awake()
     {
         base.Awake();
+        grabInteractable = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
 
-        // Auto-find if not assigned (important for spawned prefabs)
-        if (!handleInteractable)
-        {
-            // Prefer an XRSimpleInteractable (your handle)
-            handleInteractable = GetComponentInChildren<XRSimpleInteractable>(true);
-
-            // Fallback: any interactable in children
-            if (!handleInteractable)
-                handleInteractable = GetComponentInChildren<XRBaseInteractable>(true);
-            var grab = GetComponent<UnityEngine.XR.Interaction.Toolkit.Interactables.XRGrabInteractable>();
-            var handleCol = handleInteractable.GetComponent<Collider>();
-
-            if (grab && handleCol)
-            {
-                // Ensure grab interactable does NOT use the handle collider
-                grab.colliders.Remove(handleCol);
-                Debug.Log($"[SWITCH] Removed handle collider from grab colliders: {handleCol.name}");
-            }
-        }
-
-        Debug.Log($"[SWITCH][Awake] {componentId} handleInteractable={(handleInteractable ? handleInteractable.name : "NULL")}");
+        if (!grabInteractable)
+            Debug.LogError($"[SWITCH] {componentId}: No XRGrabInteractable found on root object!");
     }
 
     private void OnEnable()
     {
-        if (!handleInteractable)
-        {
-            Debug.LogError($"[SWITCH] {componentId}: handleInteractable is not assigned!");
-            return;
-        }
+        if (!grabInteractable) return;
 
-        handleInteractable.selectEntered.AddListener(OnSelectEntered);
+        // Track when a hand is near the switch (hover = hand in range, not grabbed)
+        grabInteractable.hoverEntered.AddListener(OnHoverEntered);
+        grabInteractable.hoverExited.AddListener(OnHoverExited);
+
+        // Trigger while HOLDING the switch (grip held + trigger pressed)
+        grabInteractable.activated.AddListener(OnActivated);
+
+        // Subscribe to trigger input actions so we can toggle WITHOUT grabbing first
+        if (leftActivateAction?.action != null)
+        {
+            leftActivateAction.action.Enable();
+            leftActivateAction.action.performed += OnTriggerPerformed;
+        }
+        if (rightActivateAction?.action != null)
+        {
+            rightActivateAction.action.Enable();
+            rightActivateAction.action.performed += OnTriggerPerformed;
+        }
     }
 
     private void OnDisable()
     {
-        if (handleInteractable != null)
-            handleInteractable.selectEntered.RemoveListener(OnSelectEntered);
+        if (grabInteractable != null)
+        {
+            grabInteractable.hoverEntered.RemoveListener(OnHoverEntered);
+            grabInteractable.hoverExited.RemoveListener(OnHoverExited);
+            grabInteractable.activated.RemoveListener(OnActivated);
+        }
+
+        if (leftActivateAction?.action != null)
+            leftActivateAction.action.performed -= OnTriggerPerformed;
+        if (rightActivateAction?.action != null)
+            rightActivateAction.action.performed -= OnTriggerPerformed;
     }
 
-    private void OnSelectEntered(SelectEnterEventArgs args)
+    // ── Hover tracking ────────────────────────────────────────────────────────
+
+    private void OnHoverEntered(HoverEnterEventArgs args)
     {
-        Debug.Log($"[SWITCH][SELECT] {componentId} handle selected by {args.interactorObject?.transform.name}");
+        isHovered = true;
+    }
+
+    private void OnHoverExited(HoverExitEventArgs args)
+    {
+        // Could still have other hands hovering
+        isHovered = grabInteractable.interactorsHovering.Count > 0;
+    }
+
+    // ── Trigger without grabbing ──────────────────────────────────────────────
+
+    private void OnTriggerPerformed(InputAction.CallbackContext ctx)
+    {
+        // Only fire if a hand is near the switch AND it isn't currently grabbed.
+        // The 'activated' event below handles the grab-then-trigger case.
+        if (isHovered && !grabInteractable.isSelected)
+            TryToggle();
+    }
+
+    // ── Trigger while holding ─────────────────────────────────────────────────
+
+    private void OnActivated(ActivateEventArgs args)
+    {
+        TryToggle();
+    }
+
+    // ── Shared toggle logic ───────────────────────────────────────────────────
+
+    private void TryToggle()
+    {
+        if (Time.time - lastToggleTime < toggleCooldown) return;
+        lastToggleTime = Time.time;
         Toggle();
     }
 
@@ -69,11 +119,12 @@ public class SwitchComponent : CircuitComponentBase
         isClosed = !isClosed;
         Debug.Log($"[SWITCH][TOGGLE] {componentId}: {old} -> {isClosed}");
         CircuitManager.Instance?.NotifyConnectionChanged();
+        animator.SetTrigger("Switch");
     }
 
     public override void AddToSpice(SpiceSharp.Circuit ckt, string nodeA, string nodeB)
     {
-        double r = IsClosed ? 1e-3 : 1e12; // closed ~ short, open ~ almost infinite
+        double r = IsClosed ? 1e-3 : 1e12;
         ckt.Add(new Resistor($"R_{componentId}_SW", nodeA, nodeB, r));
     }
 }

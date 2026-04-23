@@ -146,6 +146,9 @@ public class ComponentID : MonoBehaviour
     // Define grab listener
     void OnReleased(SelectExitEventArgs args)
     {
+        // Don't do anything if the save system is busy
+        if (SaveManager.Instance.isLoadingOrSaving == true) return;
+        
         // Skip if already registered
         if (!registered)
         {
@@ -163,7 +166,7 @@ public class ComponentID : MonoBehaviour
         SaveManager.Instance.CaptureLiveState();
 
         // Push snapshot to the undo stack
-        UndoManager.Instance.Do();
+        // UndoManager.Instance.Do();
     }
 
     // Subscribe to grab listener on Awake()

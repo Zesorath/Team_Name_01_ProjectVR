@@ -36,9 +36,11 @@ public class UndoManager
 
     public void Do()
     {
+        SaveManager.Instance.isLoadingOrSaving = true;
         undoStack.Push(currentState);
         currentState = new SaveData(SaveManager.Instance.saveData);
         redoStack.Clear();
+        SaveManager.Instance.isLoadingOrSaving = false;
     }
 
     public void Undo()
@@ -46,6 +48,7 @@ public class UndoManager
         if (undoStack.Count == 0)
             { d.Warn("Undo stack empty. No changes restored."); return; }
         
+        SaveManager.Instance.isLoadingOrSaving = true;
         redoStack.Push(currentState);
         currentState = undoStack.Pop();
         SaveManager.Instance.LoadFrom_object(currentState);
@@ -56,6 +59,7 @@ public class UndoManager
         if (redoStack.Count == 0)
             { d.Warn("Redo stack empty. No changes restored."); return; }
         
+        SaveManager.Instance.isLoadingOrSaving = true;
         undoStack.Push(currentState);
         currentState = redoStack.Pop();
         SaveManager.Instance.LoadFrom_object(currentState);

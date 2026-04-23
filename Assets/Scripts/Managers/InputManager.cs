@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 /// <summary>
 /// Listens for hotkey presses
@@ -48,9 +49,11 @@ public class InputManager : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.F6)) sm.SaveToSlot(1);
         if (Input.GetKeyDown(KeyCode.F7)) sm.LoadFromSlot(1);
 
-        if (Input.GetKeyDown(KeyCode.F10)) um.Undo();
-        if (Input.GetKeyDown(KeyCode.F11)) um.Redo();
-
         if (ctrl && Input.GetKeyDown(KeyCode.F8)) sm.Continue();
+
+        if (ctrl && Input.GetKeyDown(KeyCode.F11)) 
+            GameManager.ExitGame();
+        
+        if (Input.GetKeyDown(KeyCode.F10)) sm.ResetScene();
     }
 }

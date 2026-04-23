@@ -6,7 +6,7 @@ public class Bootstrap : MonoBehaviour
     void Awake()
     {
         SaveManager.Instance.Init();
-        UndoManager.Instance.Init();
+        // UndoManager.Instance.Init();
         SceneManager.LoadScene("Starting Menu");
     }
 }
